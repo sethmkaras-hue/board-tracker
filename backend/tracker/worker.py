@@ -3,6 +3,7 @@ import os
 import smtplib
 import ssl
 from collections import defaultdict
+from contextlib import contextmanager
 from datetime import datetime, time, timedelta, timezone
 from email.message import EmailMessage
 from email.utils import formataddr
@@ -75,23 +76,32 @@ def send(digest, person):
         lines.append(f"{event['board']} · {event['action']} · {event['field']}\n"
                      f"{old} → {new}\n{event['username']} · {event['timestamp']}\n{base}/boards/{event['board_id']}")
     message.set_content("\n\n".join(lines))
-    context = ssl.create_default_context(cafile=os.getenv("SMTP_CA_FILE") or None)
+    with smtp_connection() as relay:
+        relay.send_message(message)
+
+
+@contextmanager
+def smtp_connection():
+    use_starttls = "SMTP_STARTTLS" not in os.environ or enabled("SMTP_STARTTLS")
+    mode = os.getenv("SMTP_TLS") or ("starttls" if use_starttls else "none")
+    username = os.getenv("SMTP_USERNAME")
+    if username and mode == "none":
+        raise ValueError("SMTP credentials require TLS")
     host = os.environ["SMTP_HOST"]
-    mode = os.getenv("SMTP_TLS", "starttls")
+    port = int(os.getenv("SMTP_PORT") or ("465" if mode == "implicit" else "25"))
+    context = ssl.create_default_context(cafile=os.getenv("SMTP_CA_FILE") or None) if mode != "none" else None
     if mode == "implicit":
-        relay = smtplib.SMTP_SSL(host, int(os.getenv("SMTP_PORT", "465")), timeout=15, context=context)
+        relay = smtplib.SMTP_SSL(host, port, timeout=15, context=context)
     elif mode in ("starttls", "none"):
-        relay = smtplib.SMTP(host, int(os.getenv("SMTP_PORT", "25")), timeout=15)
+        relay = smtplib.SMTP(host, port, timeout=15)
     else:
         raise ValueError("Invalid SMTP_TLS")
     with relay:
         if mode == "starttls":
             relay.starttls(context=context)
-        if os.getenv("SMTP_USERNAME"):
-            if mode == "none":
-                raise ValueError("SMTP credentials require TLS")
-            relay.login(os.environ["SMTP_USERNAME"], os.environ["SMTP_PASSWORD"])
-        relay.send_message(message)
+        if username:
+            relay.login(username, os.environ["SMTP_PASSWORD"])
+        yield relay
 
 
 def deliver(db, instant):

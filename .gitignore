@@ -9,3 +9,9 @@ playwright-report/
 *.db
 deploy/tls/
 deploy/trust/
+deploy/backup-status/
+deploy/backup.env
+*.pgpass
+*.dump
+deploy/ldap.env
+deploy/smtp.env

@@ -15,7 +15,7 @@ from sqlalchemy import func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from starlette.datastructures import QueryParams
 
-from .auth import admin, authenticate, enabled, limit_login, session, token_hash, user, validate_config
+from .auth import admin, authenticate, enabled, home_auth, limit_login, session, session_token_hash, user, validate_config
 from .db import database, lock_writes, now
 from .models import Audit, Board, Digest, DigestCycle, ParentSystem, Person, Program, Review, SavedView, SessionRecord, Setting, board_programs
 from .schema import BoardCreate, BoardFields, Edit, Input, ParentFields, ProgramFields, REVIEWS, ReviewFields
@@ -85,9 +85,14 @@ def login(data: Login, request: Request, response: Response, db=Depends(database
             if getattr(person, key) != value:
                 audit(db, person, "person", person.id, "update", key, getattr(person, key), value)
                 setattr(person, key, value)
+    if home_auth():
+        is_admin = username == "home.admin"
+        if person.admin != is_admin:
+            audit(db, person, "person", person.id, "update", "admin", person.admin, is_admin)
+            person.admin = is_admin
     token = secrets.token_urlsafe(32)
     duration = 8 * 3600
-    record = SessionRecord(token_hash=token_hash(token), person_id=person.id, expires=int(time.time()) + duration,
+    record = SessionRecord(token_hash=session_token_hash(token), person_id=person.id, expires=int(time.time()) + duration,
                            csrf=secrets.token_urlsafe(32))
     db.add(record)
     commit(db)

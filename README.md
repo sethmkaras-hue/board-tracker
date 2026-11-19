@@ -2,19 +2,27 @@
 
 Board Tracker is an internal engineering workspace for circuit card design records, independent revisions, ownership, program associations, parent quantities, and review and verification history.
 
-## Development
+## RHEL deployment
 
-Prerequisites are Python 3.12 or newer, Node 22 or newer, and PostgreSQL 16. Run these commands from the existing checkout.
+Production uses rootless Podman 4.9.4-rhel, podman-compose 1.0.6, and an externally managed PostgreSQL database. Nginx serves the frontend and proxies FastAPI on a private container network. Node 22 runs in the frontend build stage. The host Node.js version is independent of deployment.
+
+Create the three protected env files and install the TLS certificates as described in the [RHEL deployment and operations guide](deploy/README.md). The guide covers PostgreSQL and Podman host-gateway access, LDAP, SMTP, SELinux, rootless ports, upgrades, systemd, backups, restoration, and diagnostics.
+
+```sh
+podman-compose build
+podman-compose run --rm backend python -m tracker.diagnostics db
+podman-compose run --rm backend alembic upgrade head
+podman-compose up -d
+```
+
+## Native development
+
+For local source development, use Python 3.12 or newer, Node 22 or newer, and an existing PostgreSQL development database. From the checkout:
 
 ```sh
 python3.12 -m venv .venv
 .venv/bin/pip install -r backend/requirements.txt
 npm --prefix frontend ci
-
-docker run --rm -d --name board-tracker-db \
-  -e POSTGRES_USER=tracker -e POSTGRES_PASSWORD=tracker -e POSTGRES_DB=tracker \
-  -p 127.0.0.1:55432:5432 postgres:16-alpine
-docker exec board-tracker-db pg_isready -U tracker -d tracker
 ```
 
 Start the API from the repository root. Use the illustrated password only on a local development instance.
@@ -38,7 +46,7 @@ npm --prefix frontend run test
 npm --prefix frontend run build
 
 # Use a separate disposable PostgreSQL database. Tests drop the application schema.
-docker exec board-tracker-db createdb -U tracker tracker_test
+createdb -h 127.0.0.1 -p 55432 -U tracker tracker_test
 (cd backend && TEST_DATABASE_URL=postgresql+psycopg://tracker:tracker@127.0.0.1:55432/tracker_test ../.venv/bin/pytest -q)
 
 # With the seeded API and Vite running:
@@ -60,3 +68,5 @@ The product uses calendar dates for reviews and UTC instants for audit events. T
 Updates submit changed fields with their original values. PostgreSQL coordinates writes with a short transaction lock shared by audit-producing requests and digest generation. A same-field stale edit returns both values. Changing separate fields preserves both updates. PostgreSQL blocks updates and deletes on audit rows with a trigger.
 
 LDAP login and administrator privileges do not enforce export-control or program-specific need-to-know restrictions. All authenticated users can open ordinary boards and export the data they can view. Define and implement any additional access policy before storing data that requires it.
+
+For local testing without corporate LDAP or SMTP, use the [Ubuntu home deployment guide](deploy/HOME.md).

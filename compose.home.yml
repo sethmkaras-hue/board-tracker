@@ -1,0 +1,37 @@
+services:
+  backend:
+    image: localhost/board-tracker-home-backend:1
+    build: ./backend
+    env_file: [.env]
+    environment:
+      APP_ENV: development
+      AUTH_MODE: development
+      DEV_AUTH: "0"
+      DEV_NOTIFICATIONS: "0"
+    extra_hosts:
+      - "host.containers.internal:host-gateway"
+    networks: [home]
+    healthcheck:
+      test: ["CMD-SHELL", "python -m tracker.diagnostics http"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  web:
+    image: localhost/board-tracker-home-web:1
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    environment:
+      NGINX_ENTRYPOINT_LOCAL_RESOLVERS: "1"
+      NGINX_ENVSUBST_FILTER: "^NGINX_LOCAL_RESOLVERS$"
+    volumes:
+      - ./deploy/nginx.home.conf:/etc/nginx/templates/default.conf.template:ro,Z
+    ports:
+      - "127.0.0.1:${HOME_HTTP_PORT:-8081}:8080"
+    depends_on: [backend]
+    networks: [home]
+
+networks:
+  home:
+    driver: bridge

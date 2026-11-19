@@ -1,119 +1,51 @@
-x-backend: &backend
-  build: ./backend
-
-x-postgres: &postgres
-  POSTGRES_DB: ${POSTGRES_DB:-tracker}
-  POSTGRES_USER: ${POSTGRES_USER:-tracker_owner}
-  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
-
 services:
-  db:
-    image: postgres:16-alpine
-    environment:
-      <<: *postgres
-    command: ["postgres", "-c", "timezone=UTC", "-c", "log_statement=none"]
-    volumes:
-      - database:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-    restart: unless-stopped
-
-  migrate:
-    <<: *backend
-    command: ["python", "-m", "tracker.migrate"]
-    environment:
-      DATABASE_URL: ${MIGRATION_DATABASE_URL:-}
-      APP_DATABASE_URL: ${DATABASE_URL:-}
-    depends_on:
-      db:
-        condition: service_healthy
-
-  api:
-    <<: *backend
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
+  backend:
+    image: localhost/board-tracker-backend:1
+    build: ./backend
+    networks: [tracker]
+    env_file: [.env, ./deploy/ldap.env]
     environment:
       APP_ENV: production
-      DEV_AUTH: ${DEV_AUTH:-0}
-      DATABASE_URL: ${DATABASE_URL:-}
       FORWARDED_ALLOW_IPS: "*"
-      LDAP_URL: ${LDAP_URL:-}
-      LDAP_BASE_DN: ${LDAP_BASE_DN:-}
-      LDAP_BIND_DN: ${LDAP_BIND_DN:-}
-      LDAP_BIND_PASSWORD: ${LDAP_BIND_PASSWORD:-}
-      LDAP_CA_FILE: ${LDAP_CA_FILE:-}
-      LDAP_STARTTLS: ${LDAP_STARTTLS:-0}
-      LDAP_USERNAME_ATTRIBUTE: ${LDAP_USERNAME_ATTRIBUTE:-sAMAccountName}
-      SMTP_HOST: ${SMTP_HOST:-}
-      NOTIFICATION_TIMEZONE: ${NOTIFICATION_TIMEZONE:-UTC}
     volumes:
-      - ${TRACKER_TRUST_DIR:-./deploy/trust}:/certs:ro
-      - backups:/backups:ro
-    restart: unless-stopped
+      - "${TRACKER_TRUST_DIR:-./deploy/trust}:/certs:ro,z"
+      - "${TRACKER_BACKUP_STATUS_DIR:-./deploy/backup-status}:/backups:ro,z"
+    restart: always
     healthcheck:
-      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8000/api/health', timeout=3)"]
-      interval: 20s
+      test: ["CMD-SHELL", "python -m tracker.diagnostics http"]
+      interval: 30s
       timeout: 5s
       retries: 3
 
   worker:
-    <<: *backend
+    image: localhost/board-tracker-backend:1
     command: ["python", "-m", "tracker.worker"]
+    networks: [tracker]
+    env_file: [.env, ./deploy/smtp.env]
     environment:
       APP_ENV: production
-      DATABASE_URL: ${DATABASE_URL:-}
-      PUBLIC_URL: ${PUBLIC_URL:-}
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-25}
-      SMTP_TLS: ${SMTP_TLS:-starttls}
-      SMTP_FROM: ${SMTP_FROM:-}
-      SMTP_CA_FILE: ${SMTP_CA_FILE:-}
-      SMTP_USERNAME: ${SMTP_USERNAME:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      NOTIFICATION_TIMEZONE: ${NOTIFICATION_TIMEZONE:-UTC}
     volumes:
-      - ${TRACKER_TRUST_DIR:-./deploy/trust}:/certs:ro
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-    restart: unless-stopped
+      - "${TRACKER_TRUST_DIR:-./deploy/trust}:/certs:ro,z"
+    restart: always
 
   web:
+    image: localhost/board-tracker-web:1
     build:
       context: .
       dockerfile: frontend/Dockerfile
+    networks: [tracker]
+    depends_on: [backend]
     ports:
-      - "${TRACKER_HTTP_PORT:-80}:80"
-      - "${TRACKER_HTTPS_PORT:-443}:443"
-    volumes:
-      - ${TRACKER_TLS_DIR:-./deploy/tls}:/etc/nginx/tls:ro
-    depends_on:
-      api:
-        condition: service_healthy
-    restart: unless-stopped
-
-  backup:
-    image: postgres:16-alpine
+      - "${TRACKER_HTTP_PORT:-8080}:8080"
+      - "${TRACKER_HTTPS_PORT:-8443}:8443"
     environment:
-      <<: *postgres
-      PGHOST: db
-      TZ: UTC
-      BACKUP_HOUR_UTC: ${BACKUP_HOUR_UTC:-2}
-      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
-    entrypoint: ["/bin/sh", "/scripts/backup-loop.sh"]
+      PUBLIC_URL: "${PUBLIC_URL:-https://localhost:8443}"
+      NGINX_ENTRYPOINT_LOCAL_RESOLVERS: "1"
+      NGINX_ENVSUBST_FILTER: "^(PUBLIC_URL|NGINX_LOCAL_RESOLVERS)$"
     volumes:
-      - ./deploy/backup-loop.sh:/scripts/backup-loop.sh:ro
-      - ./deploy/backup.sh:/scripts/backup.sh:ro
-      - backups:/backups
-    depends_on:
-      migrate:
-        condition: service_completed_successfully
-    restart: unless-stopped
+      - "${TRACKER_TLS_DIR:-./deploy/tls}:/etc/nginx/tls:ro,Z"
+    restart: always
 
-volumes:
-  database:
-  backups:
+networks:
+  tracker:
+    driver: bridge

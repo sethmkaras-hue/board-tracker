@@ -38,3 +38,17 @@
 - Inactivity means 30 days without board-related audit activity. Timezone preferences are local to the browser.
 - The scheduler catches up from the most recent successful cycle when it restarts. An SMTP relay may accept a message before the application can record success. The stable Message-ID supports relay deduplication when available.
 - Application users have no direct database access. The deployment operator controls database credentials, backups, and restore.
+
+## RHEL Podman deployment update
+
+| Requirement | Status | Evidence and scope |
+| --- | --- | --- |
+| External PostgreSQL and migrations | Tested | Environment variables construct the psycopg URL. The backend image connected to a separate disposable PostgreSQL instance and ran Alembic upgrades, including a repeat upgrade. No production database container or volume is declared. |
+| Podman Compose 1.0.6 manifest | Tested | The exact 1.0.6 version parsed the manifest and generated dry-run build, network, SELinux mount, health-check, and startup commands. Only Nginx publishes ports. These static checks did not use a Podman engine. |
+| Frontend, backend, worker images | Tested | Both images built using the available Docker engine for validation. Node 22 compiled the frontend inside the build stage. The Nginx runtime had no Node executable and served HTTPS, client routes, and proxied API health. The worker started separately. |
+| LDAP, SMTP, notification, and core workflows | Tested | PostgreSQL pytest covers LDAP mocks, SMTP transport settings, digest deduplication and retries, permissions, audit, search, and exports. Frontend unit and Playwright tests cover core workflows. |
+| Host systemd service and timer | Implemented | User units passed static systemd verification with the local Compose executable path. Reboot and lingering behavior require a running RHEL user manager. |
+| External PostgreSQL backup and restore | Tested | The backup script ran with standard PostgreSQL client tools and wrote a verified dump to a persistent host directory. A disposable restore recovered a synthetic record and the immutable-audit trigger. A deliberately failed connection retained the previous dump. |
+| Secrets and host dependencies | Tested | Deployment env files and dump files are ignored. The resolved Compose configuration keeps database credentials out of Nginx. Deployment commands use Podman and containerized Node. |
+| Native RHEL acceptance | Blocked | This workspace has no Podman binary or enforcing RHEL host. Validate build and startup with Podman 4.9.4-rhel, rootless host gateway and DNS, SELinux enforcing, and restart after reboot on the target host. |
+| Corporate service acceptance | Pending | Verify the production PostgreSQL role and TLS, LDAP bind and user sign-in, and SMTP delivery against the real corporate services. |

@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily Board Tracker PostgreSQL backup
+
+[Timer]
+OnCalendar=*-*-* 02:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

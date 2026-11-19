@@ -17,7 +17,7 @@ test('sign in, create a board, edit notes, and filter the board list', async ({ 
   await overview.getByRole('button', { name: 'Edit' }).click()
   await overview.getByLabel('Notes').fill('Playwright verification notes')
   await overview.getByRole('button', { name: 'Save changes' }).click()
-  await expect(overview.getByText('Playwright verification notes')).toBeVisible()
+  await expect(overview.getByRole('definition').filter({ hasText: 'Playwright verification notes' })).toBeVisible()
   await page.getByRole('link', { name: 'Boards', exact: true }).last().click()
   await page.getByRole('textbox', { name: 'Board identifier search' }).fill(identifier)
   await expect(page.getByRole('link', { name: identifier })).toBeVisible()

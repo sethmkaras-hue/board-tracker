@@ -23,7 +23,24 @@ def enabled(name):
     return os.getenv(name, "").lower() in ("true", "1")
 
 
+HOME_ACCOUNTS = {
+    "home.admin": ("Home Admin", "HOME_ADMIN_PASSWORD"),
+    "home.user": ("Home User", "HOME_USER_PASSWORD"),
+}
+
+
+def home_auth():
+    return os.getenv("AUTH_MODE") == "development"
+
+
 def validate_config():
+    if home_auth():
+        if os.getenv("APP_ENV") != "development":
+            raise RuntimeError("Development authentication requires APP_ENV=development")
+        passwords = [os.getenv(key) for _, key in HOME_ACCOUNTS.values()]
+        if any(not password or password == "CHANGE_ME" for password in passwords) or len(set(passwords)) != 2:
+            raise RuntimeError("Set distinct HOME_ADMIN_PASSWORD and HOME_USER_PASSWORD values")
+        return
     if os.getenv("APP_ENV", "production") == "production":
         if enabled("DEV_AUTH"):
             raise RuntimeError("DEV_AUTH must be disabled in production")
@@ -48,6 +65,16 @@ def ldap_server():
 
 def authenticate(username, password):
     if not password:
+        return None
+    if home_auth():
+        account = HOME_ACCOUNTS.get(username)
+        if os.getenv("APP_ENV") == "development" and account:
+            name, key = account
+            configured = os.getenv(key, "")
+            if configured and configured != "CHANGE_ME" and secrets.compare_digest(password.encode(), configured.encode()):
+                return name, f"{username}@example.test"
+        return None
+    if username in HOME_ACCOUNTS:
         return None
     if enabled("DEV_AUTH") and os.getenv("APP_ENV") == "development":
         if secrets.compare_digest(password, os.getenv("DEV_PASSWORD", "")):
@@ -79,6 +106,11 @@ def token_hash(token):
     return hashlib.sha256(token.encode()).hexdigest()
 
 
+def session_token_hash(token):
+    # Home sessions must never authenticate an LDAP deployment using the same database.
+    return token_hash(f"home:{token}" if home_auth() else token)
+
+
 def limit_login(db, address):
     key = token_hash(address)
     if db.bind.dialect.name == "postgresql":
@@ -99,7 +131,7 @@ def limit_login(db, address):
 
 def session(request: Request, db=Depends(database)):
     token = request.cookies.get("tracker_session")
-    record = db.get(SessionRecord, token_hash(token)) if token else None
+    record = db.get(SessionRecord, session_token_hash(token)) if token else None
     if not record or record.expires <= int(time.time()):
         raise HTTPException(401, "Please sign in")
     if request.method not in ("GET", "HEAD", "OPTIONS"):

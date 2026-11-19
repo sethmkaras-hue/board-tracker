@@ -1,0 +1,9 @@
+[Unit]
+Description=Back up the external Board Tracker PostgreSQL database
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/board-tracker
+EnvironmentFile=%h/.config/board-tracker/backup.env
+ExecStart=/bin/sh deploy/backup.sh
+UMask=0077

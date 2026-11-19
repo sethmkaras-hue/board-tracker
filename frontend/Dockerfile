@@ -1,4 +1,4 @@
-FROM node:22-alpine AS build
+FROM docker.io/library/node:22-alpine3.22 AS build
 WORKDIR /app
 COPY frontend/package*.json ./
 RUN --mount=type=secret,id=build_ca \
@@ -7,6 +7,6 @@ RUN --mount=type=secret,id=build_ca \
 COPY frontend/ .
 RUN npm run build
 
-FROM nginx:stable-alpine
-COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
+FROM docker.io/library/nginx:1.28.0-alpine
+COPY --chmod=644 deploy/nginx.conf /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html
