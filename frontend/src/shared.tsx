@@ -1,7 +1,7 @@
 import { createContext, useContext, type ReactNode } from 'react'
 import type { Person, Program } from './api'
 
-type Context = {person:Person; people:Person[]; programs:Program[]; timezone:string; toast:(message:string)=>void; refresh:()=>void}
+type Context = {person:Person; people:Person[]; programs:Program[]; toast:(message:string)=>void; refresh:()=>void}
 export const Tracker = createContext<Context>(null!)
 export const useTracker = () => useContext(Tracker)
 

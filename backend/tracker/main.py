@@ -347,12 +347,18 @@ def dashboard(actor=Depends(user), db=Depends(database)):
                 stale=count({"stale": "true"}), recent=[board_data(board) for board in recent])
 
 
-def activity_query(actor, board_id=None):
+def activity_query(actor, board_id=None, program_id=None):
     stmt = select(Audit).order_by(Audit.id.desc())
     if not actor.admin:
         stmt = stmt.where(or_(Audit.board_id.is_(None), Audit.board_id.in_(select(Board.id).where(Board.deleted_at.is_(None)))))
     if board_id:
         stmt = stmt.where(Audit.board_id == board_id)
+    if program_id is not None:
+        program_boards = select(Board.id).where(Board.deleted_at.is_(None), Board.programs.any(Program.id == program_id))
+        stmt = stmt.where(or_(
+            (Audit.entity == "program") & (Audit.entity_id == program_id) & Audit.board_id.is_(None),
+            (Audit.entity != "program") & Audit.board_id.in_(program_boards),
+        ))
     return stmt
 
 
@@ -361,8 +367,8 @@ def audit_data(row):
 
 
 @app.get("/api/activity")
-def activity(board_id: int | None = None, page: int = Query(1, ge=1), actor=Depends(user), db=Depends(database)):
-    query = activity_query(actor, board_id)
+def activity(board_id: int | None = None, program_id: int | None = None, page: int = Query(1, ge=1), actor=Depends(user), db=Depends(database)):
+    query = activity_query(actor, board_id, program_id)
     return {"items": [audit_data(row) for row in db.scalars(query.offset((page-1)*50).limit(50))],
             "total": db.scalar(select(func.count()).select_from(query.order_by(None).subquery()))}
 
@@ -373,9 +379,10 @@ def attachment(data, name, fmt):
 
 
 @app.get("/api/export/activity")
-def activity_export(fmt: Literal["csv", "xlsx"] = "xlsx", board_id: int | None = None, actor=Depends(user), db=Depends(database)):
+def activity_export(fmt: Literal["csv", "xlsx"] = "xlsx", board_id: int | None = None, program_id: int | None = None,
+                    actor=Depends(user), db=Depends(database)):
     keys = [c.key for c in Audit.__table__.columns if c.key != "deletion_recipients"]
-    rows = [[audit_data(row)[key] for key in keys] for row in db.scalars(activity_query(actor, board_id))]
+    rows = [[audit_data(row)[key] for key in keys] for row in db.scalars(activity_query(actor, board_id, program_id))]
     return attachment(export(rows, keys, fmt), "activity", fmt)
 
 

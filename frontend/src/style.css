@@ -22,8 +22,6 @@ small,.muted{color:var(--muted)}
 .sidebar nav a:hover{background:var(--fill)}
 .sidebar nav a.active{color:var(--accent-text);background:var(--accent-bg);font-weight:690}
 .account{margin-top:auto;padding:13px 4px 0;border-top:1px solid var(--line)}
-.timezone{font-size:11px;margin-bottom:14px;color:var(--muted);gap:5px!important}
-.timezone select{width:100%;font-size:11px;min-height:32px}
 .account-row{display:flex;align-items:center;gap:8px;font-size:12px}
 .account-row .icon-button{margin-left:auto}
 .avatar{display:grid;place-items:center;border-radius:50%;width:33px;height:33px;background:var(--accent-bg);color:var(--accent-text);font-weight:750;flex:none}
@@ -147,3 +145,23 @@ label,.form-field{display:grid;gap:6px;font-weight:600;color:var(--text)}
 .review-timeline-note{margin:4px 17px 12px;font-size:12px}
 @media(max-width:760px){.create-section .form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:570px){.create-section .form-grid{grid-template-columns:1fr}.board-modal{padding-inline:12px}}
+
+.login .app-acronym{color:var(--ink);font-weight:600}
+.program-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.program-summary .bar-row{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr) max-content}
+.program-summary .bar-row > :first-child{overflow-wrap:anywhere}
+.program-review-timeline .review-timeline-chart{padding-left:160px}
+.program-review-row{position:relative;border-bottom:1px solid var(--line)}
+.program-review-board{position:sticky;left:0;top:0;display:flex;align-items:center;height:100%;width:108px;margin-left:-160px;padding-left:17px;background:var(--panel);font-weight:650;z-index:3}
+.program-review-undated{position:absolute;left:4px;top:8px;background:var(--panel);padding:0 4px;font-size:12px}
+.program-review-row .review-milestone,.program-review-row .review-milestone.label-before{transform:translate(-50%,-50%)}
+.program-review-marker{display:grid;place-items:center;width:26px;height:26px;position:relative;border-radius:50%;cursor:help}
+.program-review-marker:hover,.program-review-marker:focus{z-index:2;background:var(--fill)}
+.program-review-row .review-milestone:focus-within,.program-review-row .review-milestone:hover{z-index:2}
+.program-review-marker .review-tooltip{left:50%;right:auto;max-width:240px;width:max-content;white-space:normal}
+.label-before .program-review-marker .review-tooltip{left:auto;right:50%}
+.program-review-marker:hover .review-tooltip,.program-review-marker:focus .review-tooltip{display:block}
+.program-review-legend{display:flex;flex-wrap:wrap;gap:6px 16px;padding:8px 17px 13px;color:var(--muted);font-size:12px}
+.program-review-legend li{display:flex;align-items:center;gap:6px}
+@media(max-width:980px){.program-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:570px){.program-summary{grid-template-columns:1fr}.crumb .app-name{display:inline;color:var(--ink);font-weight:650}.crumb strong{display:none}}

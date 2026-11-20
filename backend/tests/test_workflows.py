@@ -330,3 +330,41 @@ def test_legacy_undated_reviews_and_maturity_zero_remain_editable(client):
     endpoint = path + "/reviews/" + quote(REVIEWS[0])
     assert edit(client, endpoint, {"state": "Scheduled"}, {"state": "Not Started"}, "PUT").status_code == 200
     assert edit(client, endpoint, {"date": REVIEW_DATE}, {"date": None}, "PUT").status_code == 200
+
+
+def test_program_review_and_activity_scope(client):
+    actor = login(client)
+    program_id = client.post("/api/programs", json={"name": "Alpha"}).json()["id"]
+    other_id = client.post("/api/programs", json={"name": "Other"}).json()["id"]
+    attached = create(client, actor, "SRC00042", program_ids=[program_id, other_id])
+    outside = create(client, actor, "SRC00043", program_ids=[other_id])
+
+    path = f"/api/programs/{program_id}"
+    scope = {"program_id": program_id}
+    records = client.get(path).json()["boards"]
+    assert [board["identifier"] for board in records] == [attached["identifier"]]
+    assert {review["kind"] for review in records[0]["reviews"]} == set(REVIEWS)
+    assert all(review["date"] == REVIEW_DATE for review in records[0]["reviews"])
+
+    board_path = f"/api/boards/{attached['id']}"
+    review_path = board_path + "/reviews/" + quote(REVIEWS[0])
+    change = {"date": "2027-04-10", "state": "Working Action Items"}
+    assert edit(client, review_path, change, {"date": REVIEW_DATE, "state": "Not Started"}, "PUT").status_code == 200
+    review = next(row for row in client.get(path).json()["boards"][0]["reviews"] if row["kind"] == REVIEWS[0])
+    assert {key: review[key] for key in change} == change
+
+    assert edit(client, f"/api/programs/{other_id}", {"notes": "Other program notes"}, {"notes": None}).status_code == 200
+    events = client.get("/api/activity", params=scope).json()["items"]
+    assert {event["board_id"] for event in events} == {None, attached["id"]}
+    assert any(event["value"] == "Working Action Items" for event in events)
+    assert all(event["value"] != "Other program notes" for event in events)
+    export = client.get("/api/export/activity", params={**scope, "fmt": "csv"}).text
+    assert "Working Action Items" in export
+    assert outside["identifier"] not in export and "Other program notes" not in export
+
+    assert edit(client, board_path, {"program_ids": [other_id]}, {"program_ids": [program_id, other_id]}).status_code == 200
+    assert client.get(path).json()["boards"] == []
+    assert all(event["board_id"] is None for event in client.get("/api/activity", params=scope).json()["items"])
+    outside_path = f"/api/boards/{outside['id']}"
+    assert edit(client, outside_path, {"program_ids": [program_id, other_id]}, {"program_ids": [other_id]}).status_code == 200
+    assert [board["identifier"] for board in client.get(path).json()["boards"]] == [outside["identifier"]]

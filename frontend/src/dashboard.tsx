@@ -39,10 +39,10 @@ function TypeChart({items}:{items:Record<string,number>}) {
   </section>
 }
 export function Recent({boards,title='Recently modified boards',all='/boards?sort=-updated_at'}:{boards:Board[];title?:string;all?:string}) {
-  const {timezone,people}=useTracker()
+  const {people}=useTracker()
   return <section className="panel recent"><div className="section-heading"><div><h2>{title}</h2><p>Latest updates across tracked designs</p></div><Button variant="outline" asChild><Link to={all}>View boards <ArrowRight size={15}/></Link></Button></div>
     {boards.length?<div className="table-scroll"><table><thead><tr><th>Board identifier</th><th>Status</th><th>Type</th><th>Schematic RI</th><th>Last modified</th></tr></thead>
-      <tbody>{boards.map(b=><tr key={b.id}><td><Link className="board-link" to={'/boards/'+b.id}><CircuitBoard size={16}/>{b.identifier}</Link></td><td><Badge active={b.active}/></td><td>{b.board_type||'—'}</td><td>{people.find(p=>p.id===b.schematic_ri_id)?.display_name||'—'}</td><td>{displayDate(b.updated_at,timezone)}</td></tr>)}</tbody>
+      <tbody>{boards.map(b=><tr key={b.id}><td><Link className="board-link" to={'/boards/'+b.id}><CircuitBoard size={16}/>{b.identifier}</Link></td><td><Badge active={b.active}/></td><td>{b.board_type||'—'}</td><td>{people.find(p=>p.id===b.schematic_ri_id)?.display_name||'—'}</td><td>{displayDate(b.updated_at)}</td></tr>)}</tbody>
     </table></div>:<Empty>Create a board to see activity here.</Empty>}
   </section>
 }
