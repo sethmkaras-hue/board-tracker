@@ -6,26 +6,28 @@ import { Empty, Failure, Loading, PageHeading, useTracker } from './shared'
 import { Button } from './components/ui/button'
 import { labels } from './fields'
 
-export function Timeline({boardId,version}:{boardId?:number;version?:string}) {
+export function Timeline({boardId,programId,version}:{boardId?:number;programId?:number;version?:string}) {
   const [page,setPage]=useState(1)
   const [expanded,setExpanded]=useState(false)
-  const {timezone}=useTracker()
-  const params=new URLSearchParams({page:String(page)})
-  if(boardId)params.set('board_id',String(boardId))
+  const scope=new URLSearchParams()
+  if(boardId)scope.set('board_id',String(boardId))
+  if(programId)scope.set('program_id',String(programId))
+  const params=new URLSearchParams(scope)
+  params.set('page',String(page))
   if(version)params.set('v',version)
-  const {data,error}=useData<Page<Event>>(expanded?'/activity?'+params:null)
+  const {data,error}=useData<Page<Event>>(expanded?'/activity?'+params:null,programId?30_000:undefined)
   return <section className="panel record-section separate">
     <details className="collapsible" onToggle={event=>setExpanded(event.currentTarget.open)}>
-      <summary><h2>{boardId?'Activity history':'Recorded changes'}</h2><ChevronDown size={16}/></summary>
+      <summary><h2>{boardId||programId?'Activity history':'Recorded changes'}</h2><ChevronDown size={16}/></summary>
     <div className="section-heading activity-actions"><details className="dropdown"><summary><Download size={16}/> Export</summary><div>
-      {['xlsx','csv'].map(fmt=><a key={fmt} href={'/api/export/activity?fmt='+fmt+(boardId?'&board_id='+boardId:'')}>{fmt==='xlsx'?'Excel (.xlsx)':'CSV (.csv)'}</a>)}
+      {['xlsx','csv'].map(fmt=><a key={fmt} href={'/api/export/activity?'+new URLSearchParams({...Object.fromEntries(scope),fmt})}>{fmt==='xlsx'?'Excel (.xlsx)':'CSV (.csv)'}</a>)}
     </div></details></div>
     {error?<Failure message={error}/>:!data?<Loading/>:data.items.length?<div className="activity-scroll" tabIndex={0} role="region" aria-label="Activity log"><ol className="timeline">
       {data.items.map(event=><li key={event.id}><div className="timeline-title">
         <strong>{labels[event.field]||event.field}</strong><span className="badge">{event.action}</span>
         {!boardId&&event.board_id&&<Link to={'/boards/'+event.board_id}>{event.board_label}</Link>}
       </div><p>{show(event.previous)} <span className="muted">→</span> {show(event.value)}</p>
-      <small>{event.username} · {displayDate(event.timestamp,timezone)}</small></li>)}
+      <small>{event.username} · {displayDate(event.timestamp)}</small></li>)}
     </ol></div>:<Empty>No activity has been recorded.</Empty>}
     {data&&data.total>50&&<div className="pagination"><span>Page {page} of {Math.ceil(data.total/50)}</span>
       <Button variant="outline" aria-label="Previous page" disabled={page===1} onClick={()=>setPage(page-1)}><ChevronLeft size={16}/></Button>
@@ -38,7 +40,7 @@ export function ActivityPage(){return <><PageHeading title="Activity History" de
 type Digest={id:number;day:string;read:boolean;payload:{board_id:number;board:string;field:string;previous:unknown;value:unknown;username:string;timestamp:string}[]}
 export function Notifications(){
   const {data,error,reload}=useData<Digest[]>('/notifications')
-  const {timezone,toast}=useTracker()
+  const {toast}=useTracker()
   async function update(row:Digest){
     try{await api('/notifications/'+row.id,'PATCH',{read:!row.read});reload()}
     catch(e){toast((e as Error).message)}
@@ -47,7 +49,7 @@ export function Notifications(){
     {error?<Failure message={error}/>:!data?<Loading/>:data.length?data.map(row=><section key={row.id} className="panel record-section separate">
       <div className="section-heading"><h2><Bell size={17}/> {row.day} {row.read?'':'· Unread'}</h2><Button variant="outline" onClick={()=>void update(row)}>Mark {row.read?'unread':'read'}</Button></div>
       <ol className="timeline">{row.payload.map((event,i)=><li key={i}><div className="timeline-title"><Link to={'/boards/'+event.board_id}>{event.board}</Link><strong>{labels[event.field]||event.field}</strong></div>
-        <p>{show(event.previous)} → {show(event.value)}</p><small>{event.username} · {displayDate(event.timestamp,timezone)}</small></li>)}</ol>
+        <p>{show(event.previous)} → {show(event.value)}</p><small>{event.username} · {displayDate(event.timestamp)}</small></li>)}</ol>
     </section>):<section className="panel"><Empty>No digests yet. Changes to your assigned boards will appear here after processing.</Empty></section>}
   </>
 }

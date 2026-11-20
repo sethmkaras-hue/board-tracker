@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { timelineScale } from './review-timeline'
+import { packMilestones, timelineScale } from './review-timeline'
 
 const iso = (date: Date) => date.toISOString().slice(0,10)
 
@@ -30,5 +30,14 @@ describe('review timeline scale', () => {
       expect(scale.position(new Date(today))).toBeLessThan(100)
     }
     expect(iso(timelineScale(today,[]).start)).toBe('2025-12-31')
+  })
+})
+
+describe('program milestone packing', () => {
+  it('stacks nearby markers, reuses lanes, and preserves exact positions', () => {
+    const markers = [{left:60},{left:10},{left:10},{left:11},{left:30}]
+    const packed = packMilestones(markers,5)
+    expect(packed.map(({left,lane})=>[left,lane])).toEqual([[10,0],[10,1],[11,2],[30,0],[60,0]])
+    expect(markers.map(({left})=>left)).toEqual([60,10,10,11,30])
   })
 })

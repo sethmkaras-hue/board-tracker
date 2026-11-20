@@ -2,6 +2,7 @@ import { Component, useEffect, useState, type FormEvent, type ReactNode } from '
 import { Link, NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { Activity, Bell, ChevronRight, CircuitBoard, FolderKanban, LayoutDashboard, LogOut, Menu, Moon, Search, ShieldCheck, Sun } from 'lucide-react'
 import { api, ApiError, setSession, useData, type Person, type Program } from './api'
+import { appName, appAcronym } from './branding'
 import { Button } from './components/ui/button'
 import { Dashboard } from './dashboard'
 import { Boards, BoardDetail, Programs, ProgramDetail } from './records'
@@ -26,7 +27,8 @@ function SignIn({onLogin}:{onLogin:(p:Person)=>void}) {
     finally{setBusy(false)}
   }
   return <main className="login-shell"><form className="login panel" onSubmit={submit}>
-    <div className="logo-icon"><CircuitBoard size={23}/></div><h1>Board Tracker</h1>
+    <div className="logo-icon"><CircuitBoard size={23}/></div><h1>{appName}</h1>
+    <p className="app-acronym">{appAcronym}</p>
     <p>Sign in with your corporate account.</p>
     {error && <Failure message={error}/>}
     <label>Username<input name="username" autoComplete="username" required autoFocus/></label>
@@ -45,7 +47,6 @@ function Layout({person,onLogout}:{person:Person;onLogout:()=>void}) {
   const people=useData<Person[]>('/people')
   const programs=useData<Program[]>('/programs')
   const [theme,setTheme]=useState(document.documentElement.dataset.theme === 'light' ? 'light' : 'dark')
-  const [timezone,setTimezone]=useState(localStorage.getItem('timezone') || Intl.DateTimeFormat().resolvedOptions().timeZone)
   const [message,toast]=useState('')
   const [menu,setMenu]=useState(false)
   const [term,setTerm]=useState('')
@@ -59,24 +60,21 @@ function Layout({person,onLogout}:{person:Person;onLogout:()=>void}) {
   useEffect(()=>{if(message){const timeout=setTimeout(()=>toast(''),4200);return ()=>clearTimeout(timeout)}},[message])
   async function logout(){try{await api('/auth/logout','POST');onLogout()}catch(e){toast((e as Error).message)}}
   function search(event:FormEvent){event.preventDefault();navigate('/boards?'+new URLSearchParams({q:term.trim()}));setMenu(false)}
-  return <Tracker.Provider value={{person,people:people.data||[],programs:programs.data||[],timezone,toast,refresh:()=>{people.reload();programs.reload()}}}>
+  return <Tracker.Provider value={{person,people:people.data||[],programs:programs.data||[],toast,refresh:()=>{people.reload();programs.reload()}}}>
     <div className="shell">
       <aside className={'sidebar '+(menu?'open':'')}>
-        <Link className="brand" to="/" onClick={()=>setMenu(false)}><span className="logo-icon"><CircuitBoard size={21}/></span><span>Board Tracker<small>Engineering workspace</small></span></Link>
+        <Link className="brand" to="/" onClick={()=>setMenu(false)}><span className="logo-icon"><CircuitBoard size={21}/></span><span>{appName}<small>{appAcronym}</small></span></Link>
         <nav aria-label="Main navigation">
           {navigation.filter(i=>i[1]!=='/admin'||person.admin).map(([name,to,Icon])=><NavLink key={to} to={to} end={to==='/'} onClick={()=>setMenu(false)}><Icon size={18}/>{name}</NavLink>)}
         </nav>
         <div className="account">
-          <label className="timezone">Display timezone<select value={timezone} onChange={e=>{setTimezone(e.target.value);localStorage.setItem('timezone',e.target.value)}}>
-            {[...new Set(['UTC',timezone,...Intl.supportedValuesOf('timeZone')])].sort().map(zone=><option key={zone}>{zone}</option>)}
-          </select></label>
           <div className="account-row"><span className="avatar">{person.display_name.split(' ').slice(0,2).map(s=>s[0]).join('')}</span><span><strong>{person.display_name}</strong><small>{person.admin?'Administrator':'Engineer'}</small></span><button className="icon-button" aria-label="Sign out" title="Sign out" onClick={logout}><LogOut size={17}/></button></div>
         </div>
       </aside>
       <div className="workspace">
         <div className="topbar">
           <button className="icon-button mobile-menu" onClick={()=>setMenu(!menu)} aria-expanded={menu} aria-label="Toggle navigation"><Menu size={21}/></button>
-          <div className="crumb"><span>Workspace</span><ChevronRight size={14}/><strong>{section}</strong></div>
+          <div className="crumb"><span className="app-name">{appName}</span><ChevronRight size={14}/><strong>{section}</strong></div>
           <form onSubmit={search} className="global-search"><Search size={17}/><input aria-label="Search boards globally" placeholder="Search boards…" value={term} onChange={e=>setTerm(e.target.value)}/></form>
           <button className="icon-button theme" title="Toggle theme" aria-label="Toggle theme" onClick={toggleTheme}>{theme==='light'?<Moon size={18}/>:<Sun size={18}/>}</button>
         </div>

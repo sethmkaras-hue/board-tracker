@@ -1,6 +1,6 @@
-# Board Tracker
+# BRANDEN
 
-Board Tracker is an internal engineering workspace for circuit card design records, independent revisions, ownership, program associations, parent quantities, and review and verification history.
+BRANDEN (Board Review, Analysis, and Design Engineering Navigator) is an internal engineering workspace for circuit card design records, independent revisions, ownership, program associations, parent quantities, and review and verification history.
 
 ## RHEL deployment
 
@@ -63,7 +63,7 @@ Playwright also accepts `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` for a system Chrom
 - `frontend` contains the Vite and React app with Tailwind CSS, a shadcn/ui button, TanStack Table, and Recharts.
 - `deploy` contains HTTPS proxy and database backup configuration. See [Deployment and operations](deploy/README.md) and [Implementation status](IMPLEMENTATION_STATUS.md).
 
-The product uses calendar dates for reviews and UTC instants for audit events. The browser stores a display timezone preference. Timestamp search ranges include both selected calendar dates in the timezone in the search URL. Search always evaluates the current record attributes. The dashboard's inactivity threshold is 30 days since the last board-related audit event.
+The product uses calendar dates for reviews and UTC instants for audit events. Timestamps display in the browser’s local timezone. Timestamp search ranges include both selected calendar dates and default to the browser timezone. Shared and saved searches keep any timezone recorded in the URL. Search always evaluates the current record attributes. The dashboard's inactivity threshold is 30 days since the last board-related audit event.
 
 Updates submit changed fields with their original values. PostgreSQL coordinates writes with a short transaction lock shared by audit-producing requests and digest generation. A same-field stale edit returns both values. Changing separate fields preserves both updates. PostgreSQL blocks updates and deletes on audit rows with a trigger.
 
@@ -93,3 +93,7 @@ ORDER BY identifier;
 ```
 
 Have the record owner determine the appropriate maturity for each result. An authorized edit records the change in the board’s audit history. Both PostgreSQL smoke-test databases available in this workspace returned zero matches. Run the query on the deployment database before rollout.
+
+## Program review timeline
+
+Program Detail shows all currently associated boards on the same calendar axis. The page rechecks the program every 30 seconds while visible and when the browser tab regains focus. Boards with undated reviews remain listed. Program Activity History covers updates to the program itself and activity on currently associated boards. Its CSV and Excel exports use the same scope.

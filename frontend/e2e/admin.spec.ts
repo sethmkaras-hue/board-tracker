@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { reviews } from '../src/fields'
 import { fillReviewDates } from './create-board'
 
 test('create a program, associate a board, manage reviews, and restore a deleted record', async ({ page }) => {
@@ -27,7 +28,56 @@ test('create a program, associate a board, manage reviews, and restore a deleted
   await page.getByRole('link', {name:program}).click()
   const panels = page.locator('main section.record-section > .section-heading > h2, main section.record-section > details > summary > h2')
   await expect(panels.nth(0)).toHaveText('Associated boards')
-  await expect(panels.nth(1)).toHaveText('Program details')
+  await expect(panels.nth(1)).toHaveText('Program Review Timeline')
+  await expect(panels.nth(2)).toHaveText('Program details')
+  const timeline = page.getByRole('region',{name:'Program Review Timeline'})
+  await expect(timeline.getByRole('img')).toHaveCount(5)
+  const rects = await timeline.getByRole('img').evaluateAll(markers=>markers.map(marker=>marker.getBoundingClientRect().top))
+  expect(new Set(rects).size).toBe(5)
+  const marker = timeline.getByRole('img',{name:identifier+' · Functional Overview Review · May 15, 2026 · Not Started'})
+  await marker.focus()
+  await expect(marker.locator('.review-tooltip')).toBeVisible()
+  const summary = page.getByRole('region',{name:'Program summary'})
+  await expect(summary.getByRole('heading')).toHaveText(['Board Maturity Distribution','Verification States','Review States'])
+  expect(await summary.evaluate(node=>getComputedStyle(node).gridTemplateColumns.split(' ').length)).toBe(3)
+  await page.setViewportSize({width:390,height:844})
+  expect(await summary.evaluate(node=>getComputedStyle(node).gridTemplateColumns.split(' ').length)).toBe(1)
+  await page.setViewportSize({width:1280,height:720})
+  const history = page.locator('details.collapsible').filter({hasText:'Activity history'})
+  await expect(history).not.toHaveAttribute('open','')
+  await history.locator(':scope > summary').click()
+  await expect(history.getByRole('region',{name:'Activity log'})).toBeVisible()
+  const programPath = new URL(page.url()).pathname
+  const programId = Number(programPath.split('/').pop())
+  const session = await (await page.request.get('/api/auth/me')).json()
+  const headers = {'X-CSRF-Token':session.csrf}
+  const boardPath = await timeline.getByRole('link',{name:identifier}).getAttribute('href')
+  const boardApi = '/api'+boardPath
+  const reviewPath = boardApi+'/reviews/'+encodeURIComponent('Functional Overview Review')
+  const change = await page.request.put(reviewPath,{headers,data:{
+    changes:{state:'Working Action Items',date:'2027-06-02'},
+    expected:{state:'Not Started',date:'2026-05-15'},
+  }})
+  expect(change.ok()).toBe(true)
+  await page.evaluate(()=>window.dispatchEvent(new Event('focus')))
+  await expect(timeline.getByRole('img',{name:identifier+' · Functional Overview Review · Jun 2, 2027 · Working Action Items'})).toBeVisible()
+  const remove = await page.request.patch(boardApi,{headers,data:{changes:{program_ids:[]},expected:{program_ids:[programId]}}})
+  expect(remove.ok()).toBe(true)
+  await page.evaluate(()=>window.dispatchEvent(new Event('focus')))
+  await expect(timeline.getByText('No associated boards have scheduled review dates.')).toBeVisible()
+  const add = await page.request.patch(boardApi,{headers,data:{changes:{program_ids:[programId]},expected:{program_ids:[]}}})
+  expect(add.ok()).toBe(true)
+  await page.evaluate(()=>window.dispatchEvent(new Event('focus')))
+  await expect(timeline.getByRole('img')).toHaveCount(5)
+  const secondBoard = await page.request.post('/api/boards',{headers,data:{
+    identifier:'SRC'+tag+'C', schematic_ri_id:session.id, program_ids:[programId],
+    reviews:Object.fromEntries(reviews.map(kind=>[kind,{date:'2025-01-15'}])),
+  }})
+  expect(secondBoard.ok()).toBe(true)
+  await page.evaluate(()=>window.dispatchEvent(new Event('focus')))
+  await expect(timeline.getByRole('img')).toHaveCount(10)
+  await expect(timeline.locator('.program-review-row')).toHaveCount(2)
+  await expect(timeline.getByText('Jan 2025',{exact:true})).toBeVisible()
   const details = page.locator('details.collapsible').filter({hasText:'Program details'})
   await expect(details).not.toHaveAttribute('open','')
   await details.locator('summary').click()
@@ -35,7 +85,7 @@ test('create a program, associate a board, manage reviews, and restore a deleted
   await details.getByLabel('Notes').fill('Program detail verified')
   await details.getByRole('button',{name:'Save changes'}).click()
   await expect(details.getByText('Program detail verified')).toBeVisible()
-  await page.getByRole('link',{name:identifier,exact:true}).first().click()
+  await timeline.getByRole('link',{name:identifier,exact:true}).click()
   await expect(page.getByRole('heading',{name:identifier,exact:true})).toBeVisible()
   const verification = page.locator('section.record-section').filter({has:page.getByRole('heading', {name:'Board Verification (Unit Test)',exact:true})}).last()
   await verification.getByRole('button', {name:'Edit'}).click()

@@ -1,9 +1,12 @@
 import { expect, test } from '@playwright/test'
 import { fillReviewDates } from './create-board'
 
+test.use({timezoneId:'America/Los_Angeles'})
+
 test('sign in, create a board, edit notes, and filter the board list', async ({ page }) => {
   test.skip(!process.env.E2E_DEV_PASSWORD, 'Set E2E_DEV_PASSWORD against a dedicated development instance')
   const identifier = 'SRC' + String(Date.now() % 100000).padStart(5, '0')
+  await page.addInitScript(()=>localStorage.setItem('timezone','Pacific/Kiritimati'))
   await page.goto('/')
   await page.getByLabel('Username').fill('demo.admin')
   await page.getByLabel('Password').fill(process.env.E2E_DEV_PASSWORD!)
@@ -18,6 +21,11 @@ test('sign in, create a board, edit notes, and filter the board list', async ({ 
   await page.getByRole('group', {name:'Functional Overview Review'}).getByLabel('Review hyperlink').fill('https://example.test/review')
   await page.getByRole('button', { name: 'Create board' }).click()
   await expect(page.getByRole('heading', { name: identifier })).toBeVisible()
+  const record = await (await page.request.get('/api'+new URL(page.url()).pathname)).json()
+  const localTime = await page.evaluate(timestamp=>new Intl.DateTimeFormat(undefined,{
+    dateStyle:'medium',timeStyle:'short',timeZone:'America/Los_Angeles',
+  }).format(new Date(timestamp)),record.created_at)
+  await expect(page.locator('.record-meta')).toContainText('Created '+localTime)
   const timeline = page.getByRole('region', {name:'Review dates by month'})
   await expect(timeline.getByText('Today', {exact:true})).toBeVisible()
   await expect(timeline.locator('.review-milestone')).toHaveCount(5)
@@ -62,11 +70,17 @@ test('sign in, create a board, edit notes, and filter the board list', async ({ 
 
 test('defaults to dark and retains the chosen light theme', async ({page})=>{
   test.skip(!process.env.E2E_DEV_PASSWORD, 'Set E2E_DEV_PASSWORD against a dedicated development instance')
+  await page.addInitScript(()=>localStorage.setItem('timezone','Pacific/Kiritimati'))
   await page.goto('/')
+  await expect(page).toHaveTitle('BRANDEN')
+  await expect(page.getByRole('heading',{name:'BRANDEN'})).toBeVisible()
+  await expect(page.getByText('Board Review, Analysis, and Design Engineering Navigator')).toBeVisible()
   await expect(page.locator('html')).toHaveAttribute('data-theme','dark')
   await page.getByLabel('Username').fill('demo.admin')
   await page.getByLabel('Password').fill(process.env.E2E_DEV_PASSWORD!)
   await page.getByRole('button',{name:'Sign in'}).click()
+  await expect(page.getByRole('navigation',{name:'Main navigation'})).toBeVisible()
+  await expect(page.getByLabel('Display timezone')).toHaveCount(0)
   await page.getByRole('button',{name:'Toggle theme'}).click()
   await expect(page.locator('html')).toHaveAttribute('data-theme','light')
   await page.reload()

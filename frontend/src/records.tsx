@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { flexRender, getCoreRowModel, useReactTable, type ColumnDef, type VisibilityState } from '@tanstack/react-table'
 import { ArrowDown, ArrowLeft, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, CircuitBoard, Download, ExternalLink, Filter, Pencil, Plus, Search, Trash2 } from 'lucide-react'
-import { api, displayDate, show, useData, type Board, type Page, type Parent, type Person, type Program, type Review, type Metrics } from './api'
+import { api, browserTimezone, displayDate, show, useData, type Board, type Page, type Parent, type Person, type Program, type Review, type Metrics } from './api'
 import { Empty, Failure, Loading, PageHeading, useTracker } from './shared'
 import { Button } from './components/ui/button'
 import { Badge, BarChart, Recent } from './dashboard'
@@ -64,7 +64,8 @@ export function BoardCreate({onClose,onSaved}:{onClose:()=>void;onSaved:()=>void
 }
 
 export function Boards() {
-  const {people,programs,timezone,toast}=useTracker()
+  const {people,programs,toast}=useTracker()
+  const timezone=browserTimezone()
   const [params,setParams]=useSearchParams()
   const q=params.get('q')||''
   const [term,setTerm]=useState(q)
@@ -104,7 +105,7 @@ export function Boards() {
     {accessorKey:'schematic_ri_id',header:'Schematic RI',enableSorting:false,cell:({row})=>name(people,row.original.schematic_ri_id)},
     {accessorKey:'complexity',header:'Complexity',cell:({getValue})=>show(getValue())},
     {accessorKey:'maturity',header:'Maturity',cell:({getValue})=>getValue()===0?'0 (legacy)':show(getValue())},
-    ...(['created_at','updated_at'] as const).map(key=>({accessorKey:key,header:labels[key],cell:({row}:{row:{original:Board}})=>displayDate(row.original[key],timezone)})),
+    ...(['created_at','updated_at'] as const).map(key=>({accessorKey:key,header:labels[key],cell:({row}:{row:{original:Board}})=>displayDate(row.original[key])})),
   ]
   const sort=params.get('sort')||'identifier'
   const page=Number(params.get('page')||1)
@@ -186,7 +187,7 @@ function RecordSection({title,fields,record,save,readOnly=false,collapsible=fals
 export function BoardDetail() {
   const {id}=useParams()
   const {data:board,error,reload}=useData<Board>('/boards/'+id)
-  const {person,people,timezone,toast}=useTracker()
+  const {person,people,toast}=useTracker()
   const fields=useFields()
   const [parent,setParent]=useState(false)
   if(error)return <Failure message={error}/>
@@ -205,13 +206,13 @@ export function BoardDetail() {
   ]
   return <>
     <Link className="back" to="/boards"><ArrowLeft size={15}/> Boards</Link>
-    <PageHeading title={board.identifier} description={'Last modified '+displayDate(board.updated_at,timezone)+' by '+name(people,board.updated_by)}
+    <PageHeading title={board.identifier} description={'Last modified '+displayDate(board.updated_at)+' by '+name(people,board.updated_by)}
       action={<div className="header-actions">{locked?<span className="badge inactive">Deleted</span>:<Badge active={board.active}/>}
         {person.admin&&<Button variant={locked?'outline':'danger'} onClick={()=>confirmAction('/lifecycle','POST',locked?'Restore this board?':'Soft-delete this board?',{action:locked?'restore':'delete'})}>{locked?'Restore board':'Delete board'}</Button>}</div>}/>
-    <div className="record-meta">Created {displayDate(board.created_at,timezone)} by {name(people,board.created_by)}
+    <div className="record-meta">Created {displayDate(board.created_at)} by {name(people,board.created_by)}
       {!!board.revisions?.length&&<> · Related revisions {board.revisions.map(r=><Link key={r.id} to={'/boards/'+r.id}>{r.identifier}</Link>)}</>}
     </div>
-    <ReviewTimeline reviews={board.reviews} timezone={timezone}/>
+    <ReviewTimeline reviews={board.reviews}/>
     <div className="chart-grid">{sections.map(([title,sectionFields])=><RecordSection title={title} fields={sectionFields} record={selectValues(board,boardKeys)} save={e=>persist('','PATCH',e)} readOnly={locked} key={title}/>)}</div>
     <section className="panel record-section separate"><div className="section-heading"><h2>Parent systems</h2>{!locked&&<Button variant="outline" onClick={()=>setParent(true)}><Plus size={15}/> Add parent system</Button>}</div>
       {parent&&<Editor fields={parentsFields} initial={{quantity:0}} creating onCancel={()=>setParent(false)} onSave={async e=>{await persist('/parents','POST',e.changes);setParent(false)}}/>}
@@ -247,24 +248,26 @@ export function Programs() {
 }
 export function ProgramDetail() {
   const {id}=useParams()
-  const {data,error,reload}=useData<Program&{boards:Board[];metrics:Metrics}>('/programs/'+id)
+  const {data,error,reload}=useData<Program&{boards:Board[];metrics:Metrics}>('/programs/'+id,30_000)
   const {program}=useFields()
   const {toast,refresh}=useTracker()
-  if(error)return <Failure message={error}/>
-  if(!data)return <Loading/>
+  if(!data)return error?<Failure message={error}/>:<Loading/>
   return <><Link className="back" to="/programs"><ArrowLeft size={15}/> Programs</Link>
     <PageHeading title={data.name} description={data.boards.length+' associated boards'}/>
+    {error&&<Failure message={error}/>}
     <section className="panel record-section"><div className="section-heading"><h2>Associated boards</h2></div>
       {data.boards.length?<ul className="board-list">{data.boards.map(b=><li key={b.id}><Link to={'/boards/'+b.id}>{b.identifier}</Link><Badge active={b.active}/></li>)}</ul>:<Empty>No boards are associated with this program.</Empty>}
     </section>
+    <ReviewTimeline boards={data.boards}/>
+    <div className="program-summary separate" aria-label="Program summary" role="region">
+      <BarChart title="Board Maturity Distribution" items={data.metrics.maturity} filter="maturity" scope={data.id}/>
+      <BarChart title="Verification States" items={data.metrics.verification} filter="verification" state scope={data.id}/>
+      <BarChart title="Review States" items={data.metrics.reviews} filter="review_state" state scope={data.id}/>
+    </div>
     <div className="separate"><RecordSection collapsible key={id} title="Program details" fields={program} record={selectValues(data,programKeys)} save={async edit=>{
       await api('/programs/'+id,'PATCH',edit);toast('Program updated');reload();refresh()
     }}/></div>
-    <div className="chart-grid separate">
-      <BarChart title="Board maturity distribution" items={data.metrics.maturity} filter="maturity" scope={data.id}/>
-      <BarChart title="Review states" items={data.metrics.reviews} filter="review_state" state scope={data.id}/>
-      <BarChart title="Verification states" items={data.metrics.verification} filter="verification" state scope={data.id}/>
-    </div>
+    <Timeline programId={data.id}/>
     <Recent boards={data.boards.slice(0,8)} all={'/boards?program_ids='+id+'&sort=-updated_at'}/>
   </>
 }

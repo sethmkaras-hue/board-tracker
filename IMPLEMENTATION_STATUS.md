@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | 1. Technology stack | Tested | React, TypeScript, Vite, Tailwind, shadcn/ui button, TanStack Table, and Recharts build. FastAPI, SQLAlchemy, Alembic, and PostgreSQL run. |
 | 2. Board identification and lifecycle | Tested | Required fields, identifier format, duplicates, revision links, active default, delete and restore visibility. |
-| 3. Board fields | Tested | API and forms cover engineering fields and URLs. Tests cover invalid URLs, UTF-8 notes limits, and nullable fields. Browser stores the display timezone. |
+| 3. Board fields | Tested | API and forms cover engineering fields and URLs. Tests cover invalid URLs, UTF-8 notes limits, and nullable fields. Timestamps display in the browser’s local timezone. |
 | 4. Parent systems | Tested | Multiple relationships, independent quantities, nonnegative validation, editing, and Excel output. The API and UI also support removal. |
 | 5. Programs | Tested | Shared program updates and many-to-many relationships, including browser creation and linking. |
 | 6. Review and verification | Tested | Five independently editable steps. New boards require five dates. Earlier undated reviews remain editable. State, date, and hyperlink changes are audited. |
@@ -66,3 +66,11 @@
 | Working Action Items | Tested | API covers storage, filter, export, and audit paths. Browser verifies the state after editing. |
 | Create Board form | Tested | Browser creates from the grouped form and verifies inline missing-date feedback. |
 | Review timeline | Tested | Unit tests cover month-end arithmetic, proportional spacing, and Today. Browser exercises coincident reviews and updates after editing a review. |
+
+## BRANDEN interface update
+
+| Enhancement | Status | Evidence and scope |
+| --- | --- | --- |
+| BRANDEN name and browser-local timestamps | Tested | Browser coverage checks the product name, title, and timestamp rendering with an obsolete display preference present. |
+| Program Review Timeline | Tested | Browser coverage checks shared dates, collision handling, board navigation, and refresh after review and association changes. API coverage checks program scope and review updates. |
+| Program layout and activity | Tested | Browser coverage checks panel order, desktop and mobile summary layouts, and collapsed history. API coverage checks program history and export scope. |

@@ -37,21 +37,43 @@ export async function api<T>(path:string, method='GET', body?:unknown, signal?:A
   }
   return response.status === 204 ? undefined as T : response.json()
 }
-export function useData<T>(path:string|null) {
+export function useData<T>(path:string|null, refreshInterval?:number) {
   const [result,set] = useState<{path:string; data?:T; error?:string}>({path:''})
   const [version,refresh] = useState(0)
   useEffect(() => {
     if(path===null)return
     const c = new AbortController()
-    api<T>(path,'GET',undefined,c.signal).then(data=>set({path,data}), error=>{
-      if (!c.signal.aborted) set({path,error:error.message})
+    api<T>(path,'GET',undefined,c.signal).then(data=>{
+      if(!c.signal.aborted)set({path,data})
+    }, error=>{
+      if(c.signal.aborted)return
+      const keepData=refreshInterval && (!(error instanceof ApiError)||error.status>=500)
+      set(current=>({path,error:error.message,data:keepData&&current.path===path?current.data:undefined}))
     })
     return ()=>c.abort()
-  },[path,version])
+  },[path,version,refreshInterval])
+  useEffect(()=>{
+    if(!path||!refreshInterval)return
+    const refreshVisible=()=>{
+      if(document.visibilityState==='visible')refresh(value=>value+1)
+    }
+    const timer=window.setInterval(refreshVisible,refreshInterval)
+    document.addEventListener('visibilitychange',refreshVisible)
+    window.addEventListener('focus',refreshVisible)
+    return ()=>{
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange',refreshVisible)
+      window.removeEventListener('focus',refreshVisible)
+    }
+  },[path,refreshInterval])
   return {...(result.path===path?result:{}), reload:()=>refresh(v=>v+1)}
 }
-export function displayDate(value:string, tz:string) {
-  return new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short',timeZone:tz}).format(new Date(value))
+export function displayDate(value:string) {
+  return new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'}).format(new Date(value))
+}
+
+export function browserTimezone() {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone
 }
 export function show(value:unknown):string {
   if (value === null || value === undefined || value === '') return '—'
