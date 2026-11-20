@@ -19,7 +19,9 @@ from .auth import admin, authenticate, enabled, home_auth, limit_login, session,
 from .db import database, lock_writes, now
 from .models import Audit, Board, Digest, DigestCycle, ParentSystem, Person, Program, Review, SavedView, SessionRecord, Setting, board_programs
 from .schema import BoardCreate, BoardFields, Edit, Input, ParentFields, ProgramFields, REVIEWS, ReviewFields
-from .service import apply_board, audit, board_data, board_query, columns, commit, conflict, describe, get, get_board, json_value, program_data, recipients, references, touch, export
+from .service import (REVIEW_PLANNING_ENTITY, apply_board, apply_review_assignments, assignment_values, audit, board_data,
+                      board_query, columns, commit, conflict, describe, export, get, get_board, json_value, program_data,
+                      recipients, references, touch)
 
 log = logging.getLogger(__name__)
 
@@ -141,14 +143,17 @@ def create_board(data: BoardCreate, actor=Depends(user), db=Depends(database)):
     values.setdefault("active", True)
     apply_board(db, board, actor, values, creating=True)
     board.reviews = [Review(kind=kind, date=review.date, state=review.state,
-                            url=str(review.url) if review.url else None)
+                            url=str(review.url) if review.url else None, review_start_date=review.review_start_date)
                      for kind, review in data.reviews.items()]
     db.flush()
     for review in board.reviews:
-        for field in ("state", "date", "url"):
+        for field in ("state", "date", "url", "review_start_date"):
             value = getattr(review, field)
             if value is not None:
-                audit(db, actor, "review", review.id, "create", f"{review.kind}.{field}", value=value, board=board)
+                entity = REVIEW_PLANNING_ENTITY if field == "review_start_date" else "review"
+                audit(db, actor, entity, review.id, "create", f"{review.kind}.{field}", value=value, board=board)
+        assignments = [item.model_dump() for item in data.reviews[review.kind].assignments]
+        apply_review_assignments(db, actor, board, review, assignments)
     commit(db)
     return board_data(board)
 
@@ -193,16 +198,29 @@ def update_review(board_id: int, kind: str, edit: Edit, actor=Depends(user), db=
     review = next((r for r in board.reviews if r.kind == kind), None)
     if review is None:
         raise HTTPException(404, "Review step not found")
-    current = {"state": review.state, "date": json_value(review.date), "url": review.url}
+    current = {"state": review.state, "date": json_value(review.date), "url": review.url,
+               "review_start_date": json_value(review.review_start_date), "assignments": assignment_values(review)}
     values = parse(ReviewFields, current | edit.changes)
+    current_statuses = {item["reviewer_id"]: item["allocation_status"] for item in current["assignments"]}
+    values["assignments"] = [
+        {"reviewer_id": item["reviewer_id"],
+         "allocation_status": item.get("allocation_status", current_statuses.get(item["reviewer_id"], "Not Allocated"))}
+        for item in sorted(values["assignments"], key=lambda item: item["reviewer_id"])
+    ]
     conflict(edit, current, {key: values[key] for key in edit.changes})
     validated = ReviewFields.model_validate(values)
     for key in edit.changes:
+        if key == "assignments":
+            if values[key] != current[key]:
+                apply_review_assignments(db, actor, board, review, values[key])
+                touch(board, actor)
+            continue
         value = getattr(validated, key)
         if key == "url" and value is not None:
             value = str(value)
         if getattr(review, key) != value:
-            audit(db, actor, "review", review.id, "update", f"{kind}.{key}", current[key], value, board)
+            entity = REVIEW_PLANNING_ENTITY if key == "review_start_date" else "review"
+            audit(db, actor, entity, review.id, "update", f"{kind}.{key}", current[key], value, board)
             setattr(review, key, value)
             touch(board, actor)
     commit(db)

@@ -165,3 +165,19 @@ label,.form-field{display:grid;gap:6px;font-weight:600;color:var(--text)}
 .program-review-legend li{display:flex;align-items:center;gap:6px}
 @media(max-width:980px){.program-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:570px){.program-summary{grid-template-columns:1fr}.crumb .app-name{display:inline;color:var(--ink);font-weight:650}.crumb strong{display:none}}
+
+.review-form-control,.reviewer-allocations{display:grid;gap:6px;min-width:0}
+.review-form-control>.button{justify-self:start;padding-inline:0}
+.reviewer-allocations>div{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,auto);align-items:center;gap:8px}
+.reviewer-allocations label,.reviewer-summary li{overflow-wrap:anywhere}
+.reviewer-summary ul{margin:4px 0 0;padding:0;list-style:none}
+.review-window{position:absolute;top:50%;height:8px;transform:translateY(-50%);border-radius:4px;opacity:.55}
+.review-window.manual,.window-key.manual{outline:1px dashed var(--ink);outline-offset:2px}
+.review-lane{height:58px}
+.review-lane .review-window,.review-lane .review-milestone{top:72%}
+.review-lane .review-milestone-label{transform:translateY(-23px)}
+.review-lane .review-milestone:focus-within,.review-lane .review-milestone:hover{z-index:2}
+.review-timeline .review-tooltip{width:max-content;max-width:min(275px,65vw);white-space:normal}
+.review-meeting{background:var(--accent);box-shadow:0 0 0 1px var(--ink)}
+.window-key{width:24px;height:8px;border-radius:4px;background:var(--accent)}
+@media(max-width:480px){.reviewer-allocations>div{grid-template-columns:1fr;gap:4px}}

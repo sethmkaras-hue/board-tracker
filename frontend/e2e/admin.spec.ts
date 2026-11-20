@@ -34,7 +34,7 @@ test('create a program, associate a board, manage reviews, and restore a deleted
   await expect(timeline.getByRole('img')).toHaveCount(5)
   const rects = await timeline.getByRole('img').evaluateAll(markers=>markers.map(marker=>marker.getBoundingClientRect().top))
   expect(new Set(rects).size).toBe(5)
-  const marker = timeline.getByRole('img',{name:identifier+' · Functional Overview Review · May 15, 2026 · Not Started'})
+  const marker = timeline.getByRole('img',{name:new RegExp(identifier+' · Functional Overview Review .*Meeting May 15, 2026 · Not Started')})
   await marker.focus()
   await expect(marker.locator('.review-tooltip')).toBeVisible()
   const summary = page.getByRole('region',{name:'Program summary'})
@@ -55,12 +55,12 @@ test('create a program, associate a board, manage reviews, and restore a deleted
   const boardApi = '/api'+boardPath
   const reviewPath = boardApi+'/reviews/'+encodeURIComponent('Functional Overview Review')
   const change = await page.request.put(reviewPath,{headers,data:{
-    changes:{state:'Working Action Items',date:'2027-06-02'},
-    expected:{state:'Not Started',date:'2026-05-15'},
+    changes:{state:'Working Action Items',date:'2027-06-02',assignments:[{reviewer_id:session.id}]},
+    expected:{state:'Not Started',date:'2026-05-15',assignments:[]},
   }})
   expect(change.ok()).toBe(true)
   await page.evaluate(()=>window.dispatchEvent(new Event('focus')))
-  await expect(timeline.getByRole('img',{name:identifier+' · Functional Overview Review · Jun 2, 2027 · Working Action Items'})).toBeVisible()
+  await expect(timeline.getByRole('img',{name:new RegExp(identifier+' · Functional Overview Review .*Meeting Jun 2, 2027 · Working Action Items · 0 allocated · 1 not allocated')})).toBeVisible()
   const remove = await page.request.patch(boardApi,{headers,data:{changes:{program_ids:[]},expected:{program_ids:[programId]}}})
   expect(remove.ok()).toBe(true)
   await page.evaluate(()=>window.dispatchEvent(new Event('focus')))
@@ -76,6 +76,7 @@ test('create a program, associate a board, manage reviews, and restore a deleted
   expect(secondBoard.ok()).toBe(true)
   await page.evaluate(()=>window.dispatchEvent(new Event('focus')))
   await expect(timeline.getByRole('img')).toHaveCount(10)
+  await expect(timeline.locator('.review-window')).toHaveCount(10)
   await expect(timeline.locator('.program-review-row')).toHaveCount(2)
   await expect(timeline.getByText('Jan 2025',{exact:true})).toBeVisible()
   const details = page.locator('details.collapsible').filter({hasText:'Program details'})
@@ -85,7 +86,11 @@ test('create a program, associate a board, manage reviews, and restore a deleted
   await details.getByLabel('Notes').fill('Program detail verified')
   await details.getByRole('button',{name:'Save changes'}).click()
   await expect(details.getByText('Program detail verified')).toBeVisible()
-  await timeline.getByRole('link',{name:identifier,exact:true}).click()
+  const boardLink = timeline.getByRole('link',{name:identifier,exact:true})
+  await expect(boardLink).toHaveAttribute('href',boardPath!)
+  await boardLink.scrollIntoViewIfNeeded()
+  await boardLink.click()
+  await expect(page).toHaveURL(new RegExp(boardPath+'$'))
   await expect(page.getByRole('heading',{name:identifier,exact:true})).toBeVisible()
   const verification = page.locator('section.record-section').filter({has:page.getByRole('heading', {name:'Board Verification (Unit Test)',exact:true})}).last()
   await verification.getByRole('button', {name:'Edit'}).click()

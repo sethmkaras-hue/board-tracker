@@ -97,3 +97,13 @@ Have the record owner determine the appropriate maturity for each result. An aut
 ## Program review timeline
 
 Program Detail shows all currently associated boards on the same calendar axis. The page rechecks the program every 30 seconds while visible and when the browser tab regains focus. Boards with undated reviews remain listed. Program Activity History covers updates to the program itself and activity on currently associated boards. Its CSV and Excel exports use the same scope.
+
+## Review windows and allocations
+
+Review meeting dates keep their existing values. A review with a meeting date starts seven calendar days earlier by default. Set a start-date override on or before the meeting, or clear the override to restore the default. Reviews without meetings have no review window.
+
+Any user who can edit a review can assign people from the existing directory and update their allocation status. New assignments default to **Not Allocated**. Allocations are tracked manually in BRANDEN. Planning changes appear in Activity History, and the existing notification digest rules still apply to meeting, state, and hyperlink changes.
+
+The review API returns the stored `review_start_date`, the computed `effective_review_start_date`, and `assignments` with reviewer IDs, names, and allocation statuses. Omit assignments from an update to leave them alone or supply the complete list to update membership. Use reviewer IDs and statuses in the expected list for conflict checking. If a supplied reviewer already exists and their allocation status is omitted, the current status is kept.
+
+For deployment, take a verified backup and follow the [upgrade procedure](deploy/README.md#upgrades). Rebuild the images and run `podman-compose run --rm backend alembic upgrade head` with the schema-owner role before starting the updated services. Revision `8e7b42d716fa` adds the nullable override and the assignment table. The runtime role needs access to the new table and its ID sequence when the schema owner and runtime identities differ. The migration adds no explicit dates or reviewer assignments. Downgrade stops if overrides or assignments are present.

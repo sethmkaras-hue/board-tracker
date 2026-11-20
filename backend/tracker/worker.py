@@ -15,7 +15,7 @@ from sqlalchemy import select
 from .auth import enabled
 from .db import Session, lock_writes, now
 from .models import Audit, Board, Digest, DigestCycle, Person, Setting
-from .service import recipients
+from .service import REVIEW_PLANNING_ENTITY, recipients
 
 log = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ def generate(db, instant):
     grouped = defaultdict(list)
     cache = {}
     for event in events:
-        if event.board_id is None:
+        if event.board_id is None or event.entity == REVIEW_PLANNING_ENTITY:
             continue
         if event.board_id not in cache:
             cache[event.board_id] = db.get(Board, event.board_id)

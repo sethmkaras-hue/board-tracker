@@ -3,7 +3,13 @@ import { useEffect, useState } from 'react'
 export type Person = {id:number; username:string; display_name:string; email:string|null; admin:boolean; csrf?:string}
 export type Program = {id:number; name:string; epm_id:number|null; notes:string|null; manager_ids:number[]; deputy_ids:number[]}
 export type Parent = {id:number; name:string; quantity:number; url:string|null; notes:string|null}
-export type Review = {id:number; kind:string; state:string; date:string|null; url:string|null}
+export const allocationStatuses = ['Not Allocated','Allocated'] as const
+export type ReviewAssignmentInput = {reviewer_id:number; allocation_status:typeof allocationStatuses[number]}
+export type ReviewAssignment = ReviewAssignmentInput & {reviewer_name:string}
+export type Review = {
+  id:number; kind:string; state:string; date:string|null; url:string|null
+  review_start_date:string|null; effective_review_start_date:string|null; assignments:ReviewAssignment[]
+}
 export type Board = {
   id:number; identifier:string; active:boolean; deleted_at:string|null; schematic_ri_id:number;
   layout_ri_id:number|null; board_ri_ids:number[]; program_ids:number[]; programs:Program[];

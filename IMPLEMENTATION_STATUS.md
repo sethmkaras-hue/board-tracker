@@ -74,3 +74,9 @@
 | BRANDEN name and browser-local timestamps | Tested | Browser coverage checks the product name, title, and timestamp rendering with an obsolete display preference present. |
 | Program Review Timeline | Tested | Browser coverage checks shared dates, collision handling, board navigation, and refresh after review and association changes. API coverage checks program scope and review updates. |
 | Program layout and activity | Tested | Browser coverage checks panel order, desktop and mobile summary layouts, and collapsed history. API coverage checks program history and export scope. |
+
+## Review windows and reviewer allocation
+
+- Nullable start overrides are stored independently of the meeting date. Automatic starts are computed on read and shown in the board and program timelines.
+- Review assignments reuse directory identities and store one manual allocation status per reviewer and review. Review planning audit events are visible in Activity History.
+- Revision `8e7b42d716fa` upgrades existing databases without populating overrides or assignments. The deployment procedure is documented in the README.
