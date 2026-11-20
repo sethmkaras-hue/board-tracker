@@ -15,12 +15,20 @@ from conftest import login
 from tracker import auth, worker
 from tracker.db import Session, engine, now
 from tracker.main import app
-from tracker.models import Digest, DigestCycle
+from tracker.models import Board, Digest, DigestCycle, Review
 from tracker.schema import REVIEWS
 
 
+REVIEW_DATE = "2025-05-15"
+
+
+def board_payload(person, identifier="SRC00123A"):
+    return {"identifier": identifier, "schematic_ri_id": person["id"],
+            "reviews": {kind: {"date": REVIEW_DATE} for kind in REVIEWS}}
+
+
 def create(client, person, identifier="SRC00123A", **fields):
-    result = client.post("/api/boards", json={"identifier":identifier, "schematic_ri_id":person["id"], **fields})
+    result = client.post("/api/boards", json={**board_payload(person, identifier), **fields})
     assert result.status_code == 201, result.text
     return result.json()
 
@@ -39,11 +47,11 @@ def test_validation_and_authorization(client):
         {"identifier":"SRC00123","schematic_ri_id":person["id"],"notes":"é"*2049},
         {"identifier":"SRC00123","schematic_ri_id":person["id"],"overview_url":"javascript:alert(1)"},
     ):
-        assert client.post("/api/boards", json=body).status_code == 422
+        assert client.post("/api/boards", json={"reviews": board_payload(person)["reviews"], **body}).status_code == 422
     board = create(client, person, notes="é"*2048)
     assert board["active"] is True
     assert len(board["reviews"]) == 5
-    assert client.post("/api/boards",json={"identifier":board["identifier"],"schematic_ri_id":person["id"]}).status_code == 409
+    assert client.post("/api/boards",json=board_payload(person, board["identifier"])).status_code == 409
     path = f"/api/boards/{board['id']}"
     assert client.post(path+"/lifecycle",json={"action":"delete"}).status_code == 403
     assert client.get("/api/admin/status").status_code == 403
@@ -100,7 +108,7 @@ def test_program_parent_review_filter_and_exports(client):
     parent = result.json()["parents"][0]
     assert edit(client,path+"/parents/"+str(parent["id"]),{"quantity":1},{"quantity":0}).status_code == 200
     verify = path+"/reviews/"+quote(REVIEWS[-1])
-    assert edit(client,verify,{"state":"Complete","date":"2026-01-01"},{"state":"Not Started","date":None},"PUT").status_code == 200
+    assert edit(client,verify,{"state":"Complete","date":"2026-01-01"},{"state":"Not Started","date":REVIEW_DATE},"PUT").status_code == 200
     filters = [("board_type","RF"),("board_type","Antenna"),("complexity","High"),("verification","Complete"),("review_from","2026-01-01"),("review_to","2026-01-01")]
     assert client.get("/api/boards",params=filters).json()["total"] == 1
     today = now().date().isoformat()
@@ -259,3 +267,66 @@ def test_production_session_cookie_and_verbatim_password(monkeypatch):
         assert client.post("/api/auth/logout").status_code == 403
         assert client.post("/api/auth/logout",headers={"X-CSRF-Token":result.json()["csrf"]}).status_code == 204
         assert client.get("/api/auth/me").status_code == 401
+
+
+def test_review_creation_updates_audit_and_exports(client):
+    person = login(client)
+    payload = board_payload(person)
+    kind = REVIEWS[0]
+    review = payload["reviews"][kind]
+    review.update(state="Working Action Items", url="http://example.test/first")
+    missing = {key: value for key, value in payload["reviews"].items() if key != kind}
+    assert client.post("/api/boards", json={**payload, "reviews": missing}).status_code == 422
+    for invalid in ({"url": "ftp://example.test/a"}, {"date": None}, {"state": "Invalid"}):
+        reviews = payload["reviews"] | {kind: review | invalid}
+        assert client.post("/api/boards", json={**payload, "reviews": reviews}).status_code == 422
+    without_reviews = {key: value for key, value in payload.items() if key != "reviews"}
+    assert client.post("/api/boards", json=without_reviews).status_code == 422
+
+    board = create(client, person, reviews=payload["reviews"])
+    path = f"/api/boards/{board['id']}"
+    current = next(row for row in board["reviews"] if row["kind"] == kind)
+    assert {key: current[key] for key in review} == review
+    endpoint = path + "/reviews/" + quote(kind)
+    assert edit(client, endpoint, {"url": "javascript:alert(1)"}, current, "PUT").status_code == 422
+    assert edit(client, endpoint, {"url": "https://example.test/updated"}, current, "PUT").status_code == 200
+    assert edit(client, endpoint, {"url": None}, current, "PUT").status_code == 409
+    assert client.get("/api/boards", params={"review_state": "Working Action Items"}).json()["total"] == 1
+    refreshed = client.get(path).json()
+    persisted = next(row for row in refreshed["reviews"] if row["kind"] == kind)
+    assert persisted["url"] == "https://example.test/updated"
+
+    events = client.get("/api/activity", params={"board_id": board["id"]}).json()["items"]
+    urls = [row for row in events if row["field"] == kind + ".url"]
+    assert [(row["previous"], row["value"]) for row in urls] == [
+        ("http://example.test/first", "https://example.test/updated"),
+        (None, "http://example.test/first"),
+    ]
+    assert any(row["field"] == kind + ".date" and row["value"] == REVIEW_DATE for row in events)
+    workbook = load_workbook(BytesIO(client.get("/api/export/boards").content))
+    assert any(row[2].value == "Working Action Items" and row[4].hyperlink.target == persisted["url"]
+               for row in workbook["Reviews"].iter_rows(min_row=2))
+    assert persisted["url"] in client.get("/api/export/boards?fmt=csv").text
+    assert edit(client, endpoint, {"url": None}, persisted, "PUT").status_code == 200
+
+
+def test_legacy_undated_reviews_and_maturity_zero_remain_editable(client):
+    person = login(client)
+    assert client.post("/api/boards", json={**board_payload(person), "maturity": 0}).status_code == 422
+    board = create(client, person, maturity=1)
+    with Session.begin() as db:
+        db.get(Board, board["id"]).maturity = 0
+        for review in db.scalars(select(Review).where(Review.board_id == board["id"])):
+            review.date = None
+
+    path = f"/api/boards/{board['id']}"
+    legacy = client.get(path).json()
+    assert legacy["maturity"] == 0
+    assert all(review["date"] is None for review in legacy["reviews"])
+    assert edit(client, path, {"complexity": "High"}, {"complexity": None}).json()["maturity"] == 0
+    assert edit(client, path, {"maturity": 0}, {"maturity": 0}).status_code == 422
+    assert client.get("/api/boards?maturity=0").status_code == 422
+    assert edit(client, path, {"maturity": 4}, {"maturity": 0}).status_code == 200
+    endpoint = path + "/reviews/" + quote(REVIEWS[0])
+    assert edit(client, endpoint, {"state": "Scheduled"}, {"state": "Not Started"}, "PUT").status_code == 200
+    assert edit(client, endpoint, {"date": REVIEW_DATE}, {"date": None}, "PUT").status_code == 200

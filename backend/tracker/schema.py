@@ -7,7 +7,7 @@ TYPES = ("External IO", "Power", "Digital", "RF", "Antenna", "Backplane", "Other
 LEVELS = ("Low", "Medium", "High", "Very High")
 TOOLS = ("Altium", "PADS", "Other")
 CHECKS = ("Not Started", "In Progress", "Complete")
-STATES = ("Not Started", "Scheduled", "In-Review", "Complete")
+STATES = ("Not Started", "Scheduled", "In-Review", "Working Action Items", "Complete")
 REVIEWS = ("Functional Overview Review", "Detailed Design Review", "Schematic Review", "Artwork Review", "Board Verification (Unit Test)")
 Identifier = Annotated[str, Field(pattern=r"^SRC[0-9]{5}[A-Z]?$")]
 PersonId = Annotated[StrictInt, Field(gt=0)]
@@ -45,7 +45,7 @@ class BoardFields(Input):
     board_type: Literal[TYPES] | None = None
     complexity: Literal[LEVELS] | None = None
     reuse_level: Literal[LEVELS] | None = None
-    maturity: Annotated[StrictInt, Field(ge=0, le=4)] | None = None
+    maturity: Annotated[StrictInt, Field(ge=1, le=4)] | None = None
     schematic_tool: Literal[TOOLS] | None = None
     layout_tool: Literal[TOOLS] | None = None
     components_status: Literal[CHECKS] | None = None
@@ -69,12 +69,6 @@ class BoardFields(Input):
         return self
 
 
-class BoardCreate(BoardFields):
-    identifier: Identifier
-    schematic_ri_id: PersonId
-    active: bool = True
-
-
 class ProgramFields(Input):
     name: Name
     epm_id: PersonId | None = None
@@ -93,6 +87,27 @@ class ParentFields(Input):
 class ReviewFields(Input):
     state: Literal[STATES]
     date: calendar_date | None = None
+    url: DocumentUrl | None = None
+
+
+class NewReview(ReviewFields):
+    state: Literal[STATES] = "Not Started"
+    date: calendar_date
+
+
+class BoardCreate(BoardFields):
+    identifier: Identifier
+    schematic_ri_id: PersonId
+    active: bool = True
+    reviews: dict[Literal[REVIEWS], NewReview]
+
+    @field_validator("reviews")
+    @classmethod
+    def require_each_review(cls, reviews):
+        missing = [kind for kind in REVIEWS if kind not in reviews]
+        if missing:
+            raise ValueError("Review dates are required for: " + ", ".join(missing))
+        return reviews
 
 
 class Edit(Input):

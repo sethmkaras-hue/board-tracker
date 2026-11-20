@@ -44,13 +44,18 @@ function Layout({person,onLogout}:{person:Person;onLogout:()=>void}) {
   const navigate=useNavigate()
   const people=useData<Person[]>('/people')
   const programs=useData<Program[]>('/programs')
-  const [theme,setTheme]=useState(localStorage.getItem('theme') || 'light')
+  const [theme,setTheme]=useState(document.documentElement.dataset.theme === 'light' ? 'light' : 'dark')
   const [timezone,setTimezone]=useState(localStorage.getItem('timezone') || Intl.DateTimeFormat().resolvedOptions().timeZone)
   const [message,toast]=useState('')
   const [menu,setMenu]=useState(false)
   const [term,setTerm]=useState('')
   const section=navigation.find(item=>item[1] !== '/' && location.pathname.startsWith(item[1]))?.[0] || 'Dashboard'
-  useEffect(()=>{document.documentElement.dataset.theme=theme; localStorage.setItem('theme',theme)},[theme])
+  function toggleTheme() {
+    const next = theme==='light'?'dark':'light'
+    document.documentElement.dataset.theme = next
+    localStorage.setItem('theme',next)
+    setTheme(next)
+  }
   useEffect(()=>{if(message){const timeout=setTimeout(()=>toast(''),4200);return ()=>clearTimeout(timeout)}},[message])
   async function logout(){try{await api('/auth/logout','POST');onLogout()}catch(e){toast((e as Error).message)}}
   function search(event:FormEvent){event.preventDefault();navigate('/boards?'+new URLSearchParams({q:term.trim()}));setMenu(false)}
@@ -73,7 +78,7 @@ function Layout({person,onLogout}:{person:Person;onLogout:()=>void}) {
           <button className="icon-button mobile-menu" onClick={()=>setMenu(!menu)} aria-expanded={menu} aria-label="Toggle navigation"><Menu size={21}/></button>
           <div className="crumb"><span>Workspace</span><ChevronRight size={14}/><strong>{section}</strong></div>
           <form onSubmit={search} className="global-search"><Search size={17}/><input aria-label="Search boards globally" placeholder="Search boards…" value={term} onChange={e=>setTerm(e.target.value)}/></form>
-          <button className="icon-button theme" title="Toggle theme" aria-label="Toggle theme" onClick={()=>setTheme(theme==='light'?'dark':'light')}>{theme==='light'?<Moon size={18}/>:<Sun size={18}/>}</button>
+          <button className="icon-button theme" title="Toggle theme" aria-label="Toggle theme" onClick={toggleTheme}>{theme==='light'?<Moon size={18}/>:<Sun size={18}/>}</button>
         </div>
         <main className="content"><Boundary key={location.pathname}><Routes>
           <Route path="/" element={<Dashboard/>}/><Route path="/boards" element={<Boards/>}/><Route path="/boards/:id" element={<BoardDetail/>}/>

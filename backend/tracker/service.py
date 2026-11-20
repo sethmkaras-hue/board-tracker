@@ -194,7 +194,13 @@ def board_query(query, actor):
     try:
         for key in ENUM_FILTERS:
             if values := query.getlist(key):
-                stmt = stmt.where(getattr(Board, key).in_([int(v) for v in values] if key == "maturity" else values))
+                if key == "maturity":
+                    levels = [int(value) for value in values]
+                    if any(level not in range(1, 5) for level in levels):
+                        raise HTTPException(422, "Maturity filter values must be between 1 and 4")
+                    stmt = stmt.where(Board.maturity.in_(levels))
+                else:
+                    stmt = stmt.where(getattr(Board, key).in_(values))
         for key in ("schematic_ri_id", "layout_ri_id", "board_ri_ids", "program_ids"):
             if values := query.getlist(key):
                 ids = [int(v) for v in values]

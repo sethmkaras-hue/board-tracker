@@ -9,7 +9,7 @@
 | 3. Board fields | Tested | API and forms cover engineering fields and URLs. Tests cover invalid URLs, UTF-8 notes limits, and nullable fields. Browser stores the display timezone. |
 | 4. Parent systems | Tested | Multiple relationships, independent quantities, nonnegative validation, editing, and Excel output. The API and UI also support removal. |
 | 5. Programs | Tested | Shared program updates and many-to-many relationships, including browser creation and linking. |
-| 6. Review and verification | Tested | Five independently editable steps with current state and nullable date. The API preserves previous values in audit. |
+| 6. Review and verification | Tested | Five independently editable steps. New boards require five dates. Earlier undated reviews remain editable. State, date, and hyperlink changes are audited. |
 | 7. LDAP and sessions | Tested | Mock directory bind, escaped lookup, production development-auth rejection, session expiry, and CSRF checks. |
 | 7. Live corporate LDAP | Blocked | Requires the organization's endpoint, certificate trust chain, bind setup, and designated test account. |
 | 8. Authorization | Tested | Protected endpoints, administrator-only lifecycle actions, and deleted record visibility. Admin bootstrap and role management are implemented. |
@@ -52,3 +52,17 @@
 | Secrets and host dependencies | Tested | Deployment env files and dump files are ignored. The resolved Compose configuration keeps database credentials out of Nginx. Deployment commands use Podman and containerized Node. |
 | Native RHEL acceptance | Blocked | This workspace has no Podman binary or enforcing RHEL host. Validate build and startup with Podman 4.9.4-rhel, rootless host gateway and DNS, SELinux enforcing, and restart after reboot on the target host. |
 | Corporate service acceptance | Pending | Verify the production PostgreSQL role and TLS, LDAP bind and user sign-in, and SMTP delivery against the real corporate services. |
+
+## Circuit card review and interface enhancements
+
+| Enhancement | Status | Evidence and scope |
+| --- | --- | --- |
+| Dark theme default | Tested | Browser coverage verifies dark on first visit and the saved light setting after reload. |
+| Review hyperlinks | Tested | API coverage verifies create, update, remove, validation, conflicts, audit, persistence, and exports. Browser coverage verifies the detail link and target. |
+| Required dates on creation | Tested | Browser validates each missing date inline. API rejects missing or null dates and permits edits to legacy undated reviews. |
+| Program panel ordering | Tested | Browser verifies Associated boards appears first and Program details can be expanded and edited. |
+| Activity history | Tested | Browser verifies initial collapse and the 400 px scroll region on a populated board. The workspace history uses the same component. |
+| Maturity levels | Tested | API rejects new zero values and zero filters. Migration and API tests verify legacy zero values remain readable and other fields remain editable. The two existing workspace smoke databases contained zero affected records. |
+| Working Action Items | Tested | API covers storage, filter, export, and audit paths. Browser verifies the state after editing. |
+| Create Board form | Tested | Browser creates from the grouped form and verifies inline missing-date feedback. |
+| Review timeline | Tested | Unit tests cover month-end arithmetic, proportional spacing, and Today. Browser exercises coincident reviews and updates after editing a review. |

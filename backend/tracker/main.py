@@ -137,13 +137,18 @@ def list_boards(request: Request, page: int = Query(1, ge=1), limit: int = Query
 @app.post("/api/boards", status_code=201)
 def create_board(data: BoardCreate, actor=Depends(user), db=Depends(database)):
     board = Board(created_by=actor.id)
-    values = data.model_dump(mode="json", exclude_unset=True)
+    values = data.model_dump(mode="json", exclude_unset=True, exclude={"reviews"})
     values.setdefault("active", True)
     apply_board(db, board, actor, values, creating=True)
-    board.reviews = [Review(kind=kind, state="Not Started") for kind in REVIEWS]
+    board.reviews = [Review(kind=kind, date=review.date, state=review.state,
+                            url=str(review.url) if review.url else None)
+                     for kind, review in data.reviews.items()]
     db.flush()
     for review in board.reviews:
-        audit(db, actor, "review", review.id, "create", f"{review.kind}.state", value=review.state, board=board)
+        for field in ("state", "date", "url"):
+            value = getattr(review, field)
+            if value is not None:
+                audit(db, actor, "review", review.id, "create", f"{review.kind}.{field}", value=value, board=board)
     commit(db)
     return board_data(board)
 
@@ -188,12 +193,14 @@ def update_review(board_id: int, kind: str, edit: Edit, actor=Depends(user), db=
     review = next((r for r in board.reviews if r.kind == kind), None)
     if review is None:
         raise HTTPException(404, "Review step not found")
-    current = {"state": review.state, "date": json_value(review.date)}
+    current = {"state": review.state, "date": json_value(review.date), "url": review.url}
     values = parse(ReviewFields, current | edit.changes)
     conflict(edit, current, {key: values[key] for key in edit.changes})
     validated = ReviewFields.model_validate(values)
     for key in edit.changes:
         value = getattr(validated, key)
+        if key == "url" and value is not None:
+            value = str(value)
         if getattr(review, key) != value:
             audit(db, actor, "review", review.id, "update", f"{kind}.{key}", current[key], value, board)
             setattr(review, key, value)
@@ -388,10 +395,10 @@ def boards_export(request: Request, fmt: Literal["csv", "xlsx"] = "xlsx", actor=
         board["programs"] = [p["name"] for p in board["programs"]]
         rows.append([board[key] for key in keys])
         parents.extend([[board["identifier"], p["name"], p["url"], p["quantity"], p["notes"]] for p in board["parents"]])
-        reviews.extend([[board["identifier"], r["kind"], r["state"], r["date"]] for r in board["reviews"]])
+        reviews.extend([[board["identifier"], r["kind"], r["state"], r["date"], r["url"]] for r in board["reviews"]])
         programs_rows.extend([[board["identifier"], name] for name in board["programs"]])
     sheets = [("Parent Systems", ["board", "parent", "url", "quantity", "notes"], parents),
-              ("Reviews", ["board", "review", "state", "date"], reviews),
+              ("Reviews", ["board", "review", "state", "date", "url"], reviews),
               ("Programs", ["board", "program"], programs_rows)]
     return attachment(export(rows, keys, fmt, sheets), "boards", fmt)
 

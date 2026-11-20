@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 export type Person = {id:number; username:string; display_name:string; email:string|null; admin:boolean; csrf?:string}
 export type Program = {id:number; name:string; epm_id:number|null; notes:string|null; manager_ids:number[]; deputy_ids:number[]}
 export type Parent = {id:number; name:string; quantity:number; url:string|null; notes:string|null}
-export type Review = {id:number; kind:string; state:string; date:string|null}
+export type Review = {id:number; kind:string; state:string; date:string|null; url:string|null}
 export type Board = {
   id:number; identifier:string; active:boolean; deleted_at:string|null; schematic_ri_id:number;
   layout_ri_id:number|null; board_ri_ids:number[]; program_ids:number[]; programs:Program[];
@@ -37,10 +37,11 @@ export async function api<T>(path:string, method='GET', body?:unknown, signal?:A
   }
   return response.status === 204 ? undefined as T : response.json()
 }
-export function useData<T>(path:string) {
+export function useData<T>(path:string|null) {
   const [result,set] = useState<{path:string; data?:T; error?:string}>({path:''})
   const [version,refresh] = useState(0)
   useEffect(() => {
+    if(path===null)return
     const c = new AbortController()
     api<T>(path,'GET',undefined,c.signal).then(data=>set({path,data}), error=>{
       if (!c.signal.aborted) set({path,error:error.message})

@@ -1,3 +1,4 @@
+from tracker.schema import REVIEWS
 import pytest
 
 from tracker.auth import validate_config
@@ -34,7 +35,8 @@ def test_home_accounts_and_permissions(client, monkeypatch):
     user = client.post(log_in, json={"username": "home.user", "password": "synthetic-user"}).json()
     assert not user["admin"]
     record = client.post("/api/boards", headers={"X-CSRF-Token": user["csrf"]},
-                         json={"identifier": "SRC00042", "schematic_ri_id": user["id"]})
+                         json={"identifier": "SRC00042", "schematic_ri_id": user["id"],
+                               "reviews": {kind: {"date": "2026-05-15"} for kind in REVIEWS}})
     assert record.status_code == 201
     path = f"/api/boards/{record.json()['id']}/lifecycle"
     assert client.post(path, headers={"X-CSRF-Token": user["csrf"]}, json={"action": "delete"}).status_code == 403
