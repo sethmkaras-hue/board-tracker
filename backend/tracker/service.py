@@ -13,8 +13,10 @@ from sqlalchemy import and_, exists, select
 from sqlalchemy.exc import IntegrityError
 
 from .db import now
-from .models import Audit, Board, ParentSystem, Person, Program, Review
+from .models import Audit, Board, ParentSystem, Person, Program, Review, ReviewAssignment
 from .schema import BoardFields, REVIEWS
+
+REVIEW_PLANNING_ENTITY = "review_planning"
 
 
 def commit(db):
@@ -59,8 +61,47 @@ def board_data(board):
         program_ids=[p.id for p in board.programs],
         programs=[program_data(p) for p in board.programs],
         parents=[columns(parent) for parent in board.parents],
-        reviews=[dict(columns(review), date=json_value(review.date)) for review in board.reviews],
+        reviews=[review_data(review) for review in board.reviews],
     )
+
+
+def assignment_values(review):
+    return [{"reviewer_id": item.reviewer_id, "allocation_status": item.allocation_status}
+            for item in sorted(review.assignments, key=lambda item: item.reviewer_id)]
+
+
+def review_data(review):
+    return dict(
+        {key: json_value(value) for key, value in columns(review).items()},
+        effective_review_start_date=json_value(review.effective_review_start_date),
+        assignments=[
+            dict(reviewer_id=item.reviewer_id, reviewer_name=item.reviewer.display_name,
+                 allocation_status=item.allocation_status)
+            for item in sorted(review.assignments, key=lambda item: item.reviewer_id)
+        ],
+    )
+
+
+def apply_review_assignments(db, actor, board, review, assignments):
+    current = {item.reviewer_id: item for item in review.assignments}
+    requested = {item["reviewer_id"]: item["allocation_status"] for item in assignments}
+    new_ids = requested.keys() - current.keys()
+    for person in references(db, Person, new_ids):
+        status = requested[person.id]
+        review.assignments.append(ReviewAssignment(reviewer_id=person.id, reviewer=person, allocation_status=status))
+        audit(db, actor, REVIEW_PLANNING_ENTITY, review.id, "assign", f"{review.kind}.reviewer",
+              value=f"{person.display_name} ({person.username}) · {status}", board=board)
+    for reviewer_id, item in current.items():
+        label = f"{item.reviewer.display_name} ({item.reviewer.username})"
+        if reviewer_id not in requested:
+            review.assignments.remove(item)
+            audit(db, actor, REVIEW_PLANNING_ENTITY, review.id, "unassign", f"{review.kind}.reviewer",
+                  previous=f"{label} · {item.allocation_status}", board=board)
+        elif item.allocation_status != requested[reviewer_id]:
+            status = requested[reviewer_id]
+            audit(db, actor, REVIEW_PLANNING_ENTITY, review.id, "update", f"{review.kind}.allocation_status",
+                  previous=f"{label} · {item.allocation_status}", value=f"{label} · {status}", board=board)
+            item.allocation_status = status
 
 
 def get(db, model, identifier, lock=False):

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { flexRender, getCoreRowModel, useReactTable, type ColumnDef, type VisibilityState } from '@tanstack/react-table'
 import { ArrowDown, ArrowLeft, ArrowUp, ChevronDown, ChevronLeft, ChevronRight, CircuitBoard, Download, ExternalLink, Filter, Pencil, Plus, Search, Trash2 } from 'lucide-react'
@@ -9,12 +9,12 @@ import { Badge, BarChart, Recent } from './dashboard'
 import { checks, labels, levels, reviews, states, tools, types } from './fields'
 import { choices, Editor, Modal, type Edit, type Field, type FieldGroup, type Values, type Value } from './forms'
 import { Timeline } from './operations'
+import { reviewFields, reviewReadout } from './review-fields'
 import { ReviewTimeline } from './review-timeline'
 
 const boardKeys=['identifier','active','schematic_ri_id','layout_ri_id','board_ri_ids','program_ids','board_type','complexity','reuse_level','maturity','schematic_tool','layout_tool','components_status','aras_board_url','aras_export_url','overview_url','notes']
 const programKeys=['name','manager_ids','deputy_ids','epm_id','notes']
 const parentsFields:Field[]=[{key:'name',required:true},{key:'quantity',required:true,kind:'number'},{key:'url',kind:'url'},{key:'notes',kind:'notes'}]
-const reviewFields:Field[]=[{key:'state',label:'State',required:true,options:choices(states)},{key:'date',kind:'date'},{key:'url',kind:'url',label:'Review hyperlink'}]
 function selectValues(record:object, keys:string[]):Values {
   return Object.fromEntries(keys.map(key=>[key,(record as Values)[key]??null]))
 }
@@ -38,14 +38,13 @@ function name(people:Person[],id:number|null) {return people.find(p=>p.id===id)?
 export function BoardCreate({onClose,onSaved}:{onClose:()=>void;onSaved:()=>void}) {
   const fields=useFields()
   const navigate=useNavigate()
-  const {toast}=useTracker()
-  const dateField:Field={key:'date',kind:'date',required:true,label:'Review date'}
+  const {toast,people}=useTracker()
   const groups:FieldGroup[]=[
     {title:'Board identification',fields:[...fields.identity,...fields.ownership,fields.classification[0]]},
     {title:'Technical information',fields:fields.classification.slice(1)},
     {title:'Reviews',fields:[],reviews:reviews.map(kind=>({
       title:kind,
-      fields:[dateField,reviewFields[0],reviewFields[2]].map(field=>({...field,key:kind+'.'+field.key})),
+      fields:reviewFields(people,kind+'.',true),
     }))},
     {title:'Additional information',fields:[...fields.docs,fields.programLink,fields.notes]},
   ]
@@ -56,6 +55,7 @@ export function BoardCreate({onClose,onSaved}:{onClose:()=>void;onSaved:()=>void
       const boardFields=Object.fromEntries(Object.entries(changes).filter(([key])=>!key.includes('.')))
       const reviewData=Object.fromEntries(reviews.map(kind=>[kind,{
         date:changes[kind+'.date'],state:changes[kind+'.state'],url:changes[kind+'.url']??null,
+        review_start_date:changes[kind+'.review_start_date']??null,assignments:changes[kind+'.assignments']??[],
       }]))
       const board=await api<Board>('/boards','POST',{...boardFields,reviews:reviewData})
       toast('Board created');onSaved();onClose();navigate('/boards/'+board.id)
@@ -161,14 +161,14 @@ export function Boards() {
   </>
 }
 
-function RecordSection({title,fields,record,save,readOnly=false,collapsible=false}:{title:string;fields:Field[];record:object;save:(e:Edit)=>Promise<void>;readOnly?:boolean;collapsible?:boolean}) {
+function RecordSection({title,fields,record,save,readOnly=false,collapsible=false,renderValue}:{title:string;fields:Field[];record:object;save:(e:Edit)=>Promise<void>;readOnly?:boolean;collapsible?:boolean;renderValue?:(key:string)=>ReactNode}) {
   const [editing,setEditing]=useState(false)
   const {people,programs}=useTracker()
   const values=selectValues(record,fields.map(f=>f.key))
   function render(key:string,value:Value) {
-    if(key==='program_ids'&&Array.isArray(value)&&value.length)return value.map(id=><Link key={id} to={'/programs/'+id}>{programs.find(p=>p.id===id)?.name||id}</Link>)
+    if(key==='program_ids'&&Array.isArray(value)&&value.length)return (value as number[]).map(id=><Link key={id} to={'/programs/'+id}>{programs.find(p=>p.id===id)?.name||id}</Link>)
     if(key.endsWith('_id'))return name(people,value as number|null)
-    if(key.endsWith('_ids')&&Array.isArray(value))return value.map(id=>name(people,id)).join(', ')||'—'
+    if(key.endsWith('_ids')&&Array.isArray(value))return (value as number[]).map(id=>name(people,id)).join(', ')||'—'
     if((key.endsWith('_url')||key==='url')&&typeof value==='string'&&/^https?:\/\//i.test(value))return <a href={value} target="_blank" rel="noreferrer">Open link <ExternalLink size={13}/></a>
     if(key==='maturity'&&value===0)return '0 (legacy)'
     if(key==='active')return <Badge active={!!value}/>
@@ -176,7 +176,7 @@ function RecordSection({title,fields,record,save,readOnly=false,collapsible=fals
   }
   const editButton=!editing&&!readOnly&&<Button variant="ghost" onClick={()=>setEditing(true)}><Pencil size={15}/> Edit</Button>
   const content=editing?<Editor fields={fields} initial={values} onCancel={()=>setEditing(false)} onSave={async e=>{await save(e);setEditing(false)}}/>:
-    <dl>{Object.entries(values).map(([key,value])=><div className={key==='notes'?'wide':''} key={key}><dt>{fields.find(field=>field.key===key)?.label||labels[key]||key}</dt><dd>{render(key,value)}</dd></div>)}</dl>
+    <dl>{Object.entries(values).map(([key,value])=><div className={key==='notes'||fields.find(field=>field.key===key)?.wide?'wide':''} key={key}><dt>{fields.find(field=>field.key===key)?.label||labels[key]||key}</dt><dd>{renderValue?.(key)??render(key,value)}</dd></div>)}</dl>
   return <section className="panel record-section">
     {collapsible?<details className="collapsible"><summary><h2>{title}</h2><ChevronDown size={16}/></summary>
       {editButton&&<div className="collapsible-actions">{editButton}</div>}{content}
@@ -222,7 +222,8 @@ export function BoardDetail() {
       </div>)}</div>:!parent&&<Empty>No parent systems are linked.</Empty>}
     </section>
     <section className="panel record-section separate"><div className="section-heading"><h2>Reviews and verification</h2></div>
-      <div className="chart-grid">{reviews.map(kind=>board.reviews.find(r=>r.kind===kind)).filter((r):r is Review=>!!r).map(r=><RecordSection key={r.id} title={r.kind} fields={reviewFields} record={r} readOnly={locked} save={e=>persist('/reviews/'+encodeURIComponent(r.kind),'PUT',e)}/>)}</div>
+      <div className="chart-grid">{reviews.map(kind=>board.reviews.find(r=>r.kind===kind)).filter((r):r is Review=>!!r).map(r=><RecordSection key={r.id} title={r.kind} fields={reviewFields(people)} record={{...r,assignments:r.assignments.map(({reviewer_id,allocation_status})=>({reviewer_id,allocation_status}))}}
+        renderValue={key=>reviewReadout(r,key)} readOnly={locked} save={e=>persist('/reviews/'+encodeURIComponent(r.kind),'PUT',e)}/>)}</div>
     </section>
     <Timeline boardId={board.id} version={board.updated_at}/>
   </>

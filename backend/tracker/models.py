@@ -1,3 +1,5 @@
+from datetime import date as calendar_date
+
 from sqlalchemy import Boolean, CheckConstraint, Column, Date, DateTime, ForeignKey, Integer, JSON, String, Table, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -88,6 +90,33 @@ class Review(Base):
     state: Mapped[str] = mapped_column(String(32), index=True)
     date = mapped_column(Date, index=True)
     url = mapped_column(Text)
+    review_start_date = mapped_column(Date)
+    assignments = relationship("ReviewAssignment", lazy="selectin", cascade="all, delete-orphan",
+                               order_by="ReviewAssignment.reviewer_id", passive_deletes=True)
+
+    @property
+    def effective_review_start_date(self):
+        if self.review_start_date is not None:
+            return self.review_start_date
+        if self.date is not None:
+            return calendar_date.fromordinal(max(1, self.date.toordinal() - 7))
+        return None
+
+
+class ReviewAssignment(Base):
+    __tablename__ = "review_assignments"
+    __table_args__ = (
+        UniqueConstraint("review_id", "reviewer_id", name="review_assignments_review_reviewer_key"),
+        CheckConstraint("allocation_status IN ('Not Allocated', 'Allocated')", name="allocation_status_valid"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    review_id: Mapped[int] = mapped_column(ForeignKey("reviews.id", ondelete="CASCADE"))
+    reviewer_id: Mapped[int] = mapped_column(ForeignKey("people.id", ondelete="RESTRICT"), index=True)
+    allocation_status: Mapped[str] = mapped_column(String(16), default="Not Allocated", server_default="Not Allocated")
+    created_at = mapped_column(DateTime(timezone=True), default=now, nullable=False)
+    updated_at = mapped_column(DateTime(timezone=True), default=now, onupdate=now, nullable=False)
+    reviewer = relationship("Person", lazy="joined")
+
 
 
 class Audit(Base):
