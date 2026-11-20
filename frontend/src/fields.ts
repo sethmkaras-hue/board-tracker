@@ -2,7 +2,7 @@ export const types = ['External IO','Power','Digital','RF','Antenna','Backplane'
 export const levels = ['Low','Medium','High','Very High']
 export const tools = ['Altium','PADS','Other']
 export const checks = ['Not Started','In Progress','Complete']
-export const states = ['Not Started','Scheduled','In-Review','Complete']
+export const states = ['Not Started','Scheduled','In-Review','Working Action Items','Complete']
 export const reviews = ['Functional Overview Review','Detailed Design Review','Schematic Review','Artwork Review','Board Verification (Unit Test)']
 export const labels:Record<string,string> = {
   identifier:'Board identifier', active:'Active', schematic_ri_id:'Schematic RI', layout_ri_id:'Layout RI', board_ri_ids:'Board RIs',

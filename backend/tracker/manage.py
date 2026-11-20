@@ -54,7 +54,7 @@ def seed(db):
         apply_board(db, board, people[0], {
             "identifier": identifier, "active": index not in (10, 15, 17),
             "schematic_ri_id": people[index % len(people)].id, "board_type": types[index % len(types)],
-            "complexity": levels[index % 4], "maturity": index % 5,
+            "complexity": levels[index % 4], "maturity": 1 + index % 4,
             "program_ids": [programs[index % len(programs)].id],
             "notes": "Synthetic development record.",
         }, creating=True)

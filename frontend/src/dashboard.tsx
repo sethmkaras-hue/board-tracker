@@ -6,7 +6,7 @@ import { Empty, Failure, Loading, PageHeading, useTracker } from './shared'
 import { Button } from './components/ui/button'
 
 const colors=['#6759ed','#8c7df5','#afa4fc','#c8bffd','#ded8ff','#eae6fd','#d8dce7']
-const stateColors:Record<string,string>={'Complete':'#22a77a','In-Review':'#8272ef','Scheduled':'#e5a049','Not Started':'#acb6c9'}
+export const stateColors:Record<string,string>={'Complete':'#22a77a','In-Review':'#8272ef','Scheduled':'#e5a049','Working Action Items':'#4eabe0','Not Started':'#acb6c9'}
 export function Badge({active}:{active:boolean}) {return <span className={'badge '+(active?'active':'inactive')}><i/>{active?'Active':'Inactive'}</span>}
 export function BarChart({title,items,filter,state=false,scope}:{title:string;items:Record<string,number>;filter:string;state?:boolean;scope?:number}) {
   const {programs}=useTracker()
@@ -22,7 +22,7 @@ export function BarChart({title,items,filter,state=false,scope}:{title:string;it
   }
   return <section className="panel chart"><h2>{title}</h2>
     {entries.length?<div className="bar-list">{entries.map(([name,count],i)=><div className="bar-row" key={name}>
-      {name==='Unspecified'?<span>{name}</span>:<Link to={href(name)}>{name}</Link>}
+      {name==='Unspecified'||(filter==='maturity'&&name==='0')?<span>{name==='0'?'0 (legacy)':name}</span>:<Link to={href(name)}>{name}</Link>}
       <div className="bar-track"><div style={{width:(count/maximum*100)+'%',background:state?stateColors[name]:colors[i%colors.length]}}/></div><strong>{count}</strong>
     </div>)}</div>:<Empty>No records to chart.</Empty>}
   </section>

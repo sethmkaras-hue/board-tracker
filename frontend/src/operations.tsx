@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Bell, ChevronLeft, ChevronRight, Download, ShieldCheck } from 'lucide-react'
+import { Bell, ChevronDown, ChevronLeft, ChevronRight, Download, ShieldCheck } from 'lucide-react'
 import { api, displayDate, show, useData, type Event, type Page, type Person } from './api'
 import { Empty, Failure, Loading, PageHeading, useTracker } from './shared'
 import { Button } from './components/ui/button'
@@ -8,25 +8,29 @@ import { labels } from './fields'
 
 export function Timeline({boardId,version}:{boardId?:number;version?:string}) {
   const [page,setPage]=useState(1)
+  const [expanded,setExpanded]=useState(false)
   const {timezone}=useTracker()
   const params=new URLSearchParams({page:String(page)})
   if(boardId)params.set('board_id',String(boardId))
   if(version)params.set('v',version)
-  const {data,error}=useData<Page<Event>>('/activity?'+params)
+  const {data,error}=useData<Page<Event>>(expanded?'/activity?'+params:null)
   return <section className="panel record-section separate">
-    <div className="section-heading"><h2>{boardId?'Activity history':'Recorded changes'}</h2><details className="dropdown"><summary><Download size={16}/> Export</summary><div>
+    <details className="collapsible" onToggle={event=>setExpanded(event.currentTarget.open)}>
+      <summary><h2>{boardId?'Activity history':'Recorded changes'}</h2><ChevronDown size={16}/></summary>
+    <div className="section-heading activity-actions"><details className="dropdown"><summary><Download size={16}/> Export</summary><div>
       {['xlsx','csv'].map(fmt=><a key={fmt} href={'/api/export/activity?fmt='+fmt+(boardId?'&board_id='+boardId:'')}>{fmt==='xlsx'?'Excel (.xlsx)':'CSV (.csv)'}</a>)}
     </div></details></div>
-    {error?<Failure message={error}/>:!data?<Loading/>:data.items.length?<ol className="timeline">
+    {error?<Failure message={error}/>:!data?<Loading/>:data.items.length?<div className="activity-scroll" tabIndex={0} role="region" aria-label="Activity log"><ol className="timeline">
       {data.items.map(event=><li key={event.id}><div className="timeline-title">
         <strong>{labels[event.field]||event.field}</strong><span className="badge">{event.action}</span>
         {!boardId&&event.board_id&&<Link to={'/boards/'+event.board_id}>{event.board_label}</Link>}
       </div><p>{show(event.previous)} <span className="muted">→</span> {show(event.value)}</p>
       <small>{event.username} · {displayDate(event.timestamp,timezone)}</small></li>)}
-    </ol>:<Empty>No activity has been recorded.</Empty>}
+    </ol></div>:<Empty>No activity has been recorded.</Empty>}
     {data&&data.total>50&&<div className="pagination"><span>Page {page} of {Math.ceil(data.total/50)}</span>
       <Button variant="outline" aria-label="Previous page" disabled={page===1} onClick={()=>setPage(page-1)}><ChevronLeft size={16}/></Button>
       <Button variant="outline" aria-label="Next page" disabled={page*50>=data.total} onClick={()=>setPage(page+1)}><ChevronRight size={16}/></Button></div>}
+    </details>
   </section>
 }
 export function ActivityPage(){return <><PageHeading title="Activity History" description="Review and export changes across the workspace."/><Timeline/></>}

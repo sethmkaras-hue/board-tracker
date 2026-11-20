@@ -85,8 +85,9 @@ class Review(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     board_id = mapped_column(ForeignKey("boards.id", ondelete="CASCADE"), nullable=False, index=True)
     kind: Mapped[str] = mapped_column(String(80), index=True)
-    state: Mapped[str] = mapped_column(String(16), index=True)
+    state: Mapped[str] = mapped_column(String(32), index=True)
     date = mapped_column(Date, index=True)
+    url = mapped_column(Text)
 
 
 class Audit(Base):

@@ -70,3 +70,26 @@ Updates submit changed fields with their original values. PostgreSQL coordinates
 LDAP login and administrator privileges do not enforce export-control or program-specific need-to-know restrictions. All authenticated users can open ordinary boards and export the data they can view. Define and implement any additional access policy before storing data that requires it.
 
 For local testing without corporate LDAP or SMTP, use the [Ubuntu home deployment guide](deploy/HOME.md).
+
+## Review and maturity upgrade
+
+Apply Alembic revision `9f2618a85e01` before starting the updated API. Use the deployment migration command with the existing migration database credentials.
+
+```sh
+podman-compose run --rm backend alembic upgrade head
+```
+
+The migration adds a nullable review hyperlink and widens review state storage for **Working Action Items**. Existing review dates, states, and audit entries keep their original values. The downgrade refuses to run while a review hyperlink or a newly supported state would be lost. Keep a verified pre-upgrade backup for rollback.
+
+Board creation now requires a `reviews` object keyed by the five review names. Each entry requires an ISO calendar date and accepts an optional state and HTTP or HTTPS URL. State defaults to **Not Started**. Existing reviews can still have a blank date and remain editable.
+
+Maturity selection and API writes accept 1 through 4 or an unspecified value. The database retains support for reading existing zero-valued records so the migration can preserve them. Check each deployment for any such boards, including deleted boards.
+
+```sql
+SELECT identifier, deleted_at
+FROM boards
+WHERE maturity = 0
+ORDER BY identifier;
+```
+
+Have the record owner determine the appropriate maturity for each result. An authorized edit records the change in the board’s audit history. Both PostgreSQL smoke-test databases available in this workspace returned zero matches. Run the query on the deployment database before rollout.
